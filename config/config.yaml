@@ -1,0 +1,42 @@
+# Data configuration
+data:
+  root_dir: "O:\\BTSData\\MeasurementData\\MIG\\MIG-Exp03-CP-40X-bin1X1_20230831_143904\\MIG-Exp03-CP-40X-bin1X1"
+  channels: [1, 2, 3, 4, 5]  # Which channels to use (1-5), can be single or combination
+  crop_size: 224  # Random crop size for training
+
+# DataLoader configuration  
+dataloader:
+  batch_size: 64
+  num_workers: 0
+  pin_memory: true
+  train_val_split: 0.5
+  use_mongodb: true  # Whether to use MongoDB for labels
+  use_tiling: true  # Use grid tiling instead of random cropping
+  tile_stride: null  # Stride between tiles (null = crop_size, non-overlapping)
+  cache_size: 32  # Number of images to keep in LRU cache
+  max_wells_per_label: 2  # Limit wells per label (null = all)
+  max_samples_per_label: 4  # Random samples per label for balance (null = all)
+  verbose: true  # Print detailed sample selection info
+  exclude_wells: 
+    - ["MIG-Exp03-CP-40X-bin1X1", "K07"]
+    - ["MIG-Exp03-CP-40X-bin1X1", "K08"]
+    - ["MIG-Exp03-CP-40X-bin1X1", "K09"]
+      # List of [plate, well] to exclude, e.g. [["Plate1", "A01"], ["Plate1", "B02"]]
+  
+# Training configuration
+training:
+  max_epochs: 100
+  learning_rate: 0.0001  # Reduced from 0.001 to reduce oscillations
+  weight_decay: 0.0001
+  scheduler:
+    type: "ReduceLROnPlateau"  # or "CosineAnnealingLR"
+    mode: "min"
+    factor: 0.5
+    patience: 5
+    # T_max: null  # For CosineAnnealingLR (optional)
+    # eta_min: 1e-6  # For CosineAnnealingLR (optional)
+  
+# Model configuration
+model:
+  name: "SimpleCNN"
+  dropout: 0.5
