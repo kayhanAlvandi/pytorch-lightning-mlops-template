@@ -172,11 +172,11 @@ def main():
     # Setup dual logging: TensorBoard for visualization + MLflow for tracking
     tb_logger = TensorBoardLogger(
         save_dir="logs",
-        name="cnn_classifier",
+        name="image_classifier",
     )
     
     mlflow_logger = MLFlowLogger(
-        experiment_name="cnn_classifier",
+        experiment_name="image_classifier",
         tracking_uri="file:./mlruns",
         log_model=False,
     )
@@ -216,7 +216,7 @@ def main():
         checkpoint_callback=checkpoint_callback,
         example_input=example_input,
         mlflow_logger=mlflow_logger,
-        registered_model_name="cnn_classifier",
+        registered_model_name=config.model.name,
         artifact_path="best_model",
     )
     callbacks.append(log_best_callback)
