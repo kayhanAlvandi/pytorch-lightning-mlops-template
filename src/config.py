@@ -29,13 +29,22 @@ class DataLoaderConfig:
 
 
 @dataclass
+class OptimizerConfig:
+    type: str = "Adam"  # Adam, AdamW, SGD
+    momentum: float = 0.9  # For SGD
+    nesterov: bool = True  # For SGD
+
+
+@dataclass
 class SchedulerConfig:
-    type: str = "ReduceLROnPlateau"
+    type: str = "ReduceLROnPlateau"  # ReduceLROnPlateau, CosineAnnealingLR, StepLR, None
     mode: str = "min"
     factor: float = 0.5
     patience: int = 5
-    T_max: Optional[int] = None  # For CosineAnnealingLR
+    T_max: int = 100  # For CosineAnnealingLR
     eta_min: float = 1e-6  # For CosineAnnealingLR
+    step_size: int = 30  # For StepLR
+    gamma: float = 0.1  # For StepLR
 
 
 @dataclass
@@ -43,6 +52,7 @@ class TrainingConfig:
     max_epochs: int = 50
     learning_rate: float = 0.001
     weight_decay: float = 0.0001
+    optimizer: OptimizerConfig = field(default_factory=OptimizerConfig)
     scheduler: SchedulerConfig = field(default_factory=SchedulerConfig)
 
 
@@ -50,6 +60,10 @@ class TrainingConfig:
 class ModelConfig:
     name: str = "SimpleCNN"
     dropout: float = 0.5
+    num_blocks: int = 4  # Number of conv blocks (depth)
+    base_channels: int = 32  # Starting channels (width)
+    channel_multiplier: float = 2.0  # Channel growth per block
+    hidden_dim: int = 128  # Classifier hidden dimension
 
 
 @dataclass
@@ -73,6 +87,15 @@ class Config:
             ]
         
         training_config = config_dict.get("training", {})
+        
+        # Parse optimizer config
+        optimizer_config_data = training_config.get("optimizer")
+        if optimizer_config_data is not None:
+            training_config["optimizer"] = OptimizerConfig(**optimizer_config_data)
+        else:
+            training_config["optimizer"] = OptimizerConfig()
+        
+        # Parse scheduler config
         scheduler_config_data = training_config.get("scheduler")
         if scheduler_config_data is not None:
             training_config["scheduler"] = SchedulerConfig(**scheduler_config_data)

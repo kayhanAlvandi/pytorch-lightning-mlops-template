@@ -14,12 +14,21 @@ import io
 
 
 class SimpleCNN(nn.Module):
-    """Simple CNN architecture for multi-channel image classification.
+    """Configurable CNN architecture for multi-channel image classification.
     
     Architecture:
-        - 4 convolutional blocks with BatchNorm and MaxPool
+        - N convolutional blocks with BatchNorm and MaxPool (configurable depth)
         - Global Average Pooling
-        - Fully connected classifier
+        - Fully connected classifier (configurable width)
+    
+    Args:
+        in_channels: Number of input channels
+        num_classes: Number of output classes
+        dropout: Dropout rate
+        num_blocks: Number of conv blocks (depth) - 2, 3, 4, or 5
+        base_channels: Starting number of channels (width) - 16, 32, or 64
+        channel_multiplier: How much to multiply channels per block - 1.5, 2, or 3
+        hidden_dim: Hidden layer dimension in classifier - 64, 128, or 256
     """
     
     def __init__(
@@ -27,46 +36,34 @@ class SimpleCNN(nn.Module):
         in_channels: int,
         num_classes: int,
         dropout: float = 0.5,
+        num_blocks: int = 4,
+        base_channels: int = 32,
+        channel_multiplier: float = 2.0,
+        hidden_dim: int = 128,
     ):
         super().__init__()
         
-        self.features = nn.Sequential(
-            # Block 1: in_channels -> 32
-            nn.Conv2d(in_channels, 32, kernel_size=3, padding=1),
-            nn.BatchNorm2d(32),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(32, 32, kernel_size=3, padding=1),
-            nn.BatchNorm2d(32),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(2, 2),
+        # Build feature extractor dynamically
+        layers = []
+        current_channels = in_channels
+        
+        for i in range(num_blocks):
+            out_channels = int(base_channels * (channel_multiplier ** i))
             
-            # Block 2: 32 -> 64
-            nn.Conv2d(32, 64, kernel_size=3, padding=1),
-            nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(64, 64, kernel_size=3, padding=1),
-            nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(2, 2),
-            
-            # Block 3: 64 -> 128
-            nn.Conv2d(64, 128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(128, 128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(2, 2),
-            
-            # Block 4: 128 -> 256
-            nn.Conv2d(128, 256, kernel_size=3, padding=1),
-            nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(256, 256, kernel_size=3, padding=1),
-            nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(2, 2),
-        )
+            # Conv block: 2 conv layers + BatchNorm + ReLU + MaxPool
+            layers.extend([
+                nn.Conv2d(current_channels, out_channels, kernel_size=3, padding=1),
+                nn.BatchNorm2d(out_channels),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
+                nn.BatchNorm2d(out_channels),
+                nn.ReLU(inplace=True),
+                nn.MaxPool2d(2, 2),
+            ])
+            current_channels = out_channels
+        
+        self.features = nn.Sequential(*layers)
+        self.final_channels = current_channels
         
         # Global Average Pooling
         self.global_pool = nn.AdaptiveAvgPool2d(1)
@@ -74,10 +71,10 @@ class SimpleCNN(nn.Module):
         # Classifier
         self.classifier = nn.Sequential(
             nn.Dropout(dropout),
-            nn.Linear(256, 128),
+            nn.Linear(self.final_channels, hidden_dim),
             nn.ReLU(inplace=True),
             nn.Dropout(dropout),
-            nn.Linear(128, num_classes),
+            nn.Linear(hidden_dim, num_classes),
         )
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -98,6 +95,10 @@ class CNNClassifier(pl.LightningModule):
         learning_rate: float = 0.001,
         weight_decay: float = 0.0001,
         dropout: float = 0.5,
+        num_blocks: int = 4,
+        base_channels: int = 32,
+        channel_multiplier: float = 2.0,
+        hidden_dim: int = 128,
         class_names: Optional[List[str]] = None,
     ):
         super().__init__()
@@ -107,6 +108,10 @@ class CNNClassifier(pl.LightningModule):
             in_channels=in_channels,
             num_classes=num_classes,
             dropout=dropout,
+            num_blocks=num_blocks,
+            base_channels=base_channels,
+            channel_multiplier=channel_multiplier,
+            hidden_dim=hidden_dim,
         )
         
         self.learning_rate = learning_rate
@@ -311,16 +316,38 @@ class CNNClassifier(pl.LightningModule):
         return {"test_loss": loss, "preds": preds, "labels": labels}
     
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(
-            self.parameters(),
-            lr=self.learning_rate,
-            weight_decay=self.weight_decay,
-        )
+        # Create optimizer based on config
+        optimizer_config = self._optimizer_config
+        
+        if optimizer_config.type == "Adam":
+            optimizer = torch.optim.Adam(
+                self.parameters(),
+                lr=self.learning_rate,
+                weight_decay=self.weight_decay,
+            )
+        elif optimizer_config.type == "AdamW":
+            optimizer = torch.optim.AdamW(
+                self.parameters(),
+                lr=self.learning_rate,
+                weight_decay=self.weight_decay,
+            )
+        elif optimizer_config.type == "SGD":
+            optimizer = torch.optim.SGD(
+                self.parameters(),
+                lr=self.learning_rate,
+                weight_decay=self.weight_decay,
+                momentum=optimizer_config.momentum,
+                nesterov=optimizer_config.nesterov,
+            )
+        else:
+            raise ValueError(f"Unknown optimizer type: {optimizer_config.type}")
         
         # Create scheduler based on config
         scheduler_config = self._scheduler_config
         
-        if scheduler_config.type == "ReduceLROnPlateau":
+        if scheduler_config.type == "None" or scheduler_config.type is None:
+            return optimizer
+        elif scheduler_config.type == "ReduceLROnPlateau":
             scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
                 optimizer,
                 mode=scheduler_config.mode,
@@ -335,11 +362,23 @@ class CNNClassifier(pl.LightningModule):
                 },
             }
         elif scheduler_config.type == "CosineAnnealingLR":
-            T_max = scheduler_config.T_max or self.trainer.max_epochs
             scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
                 optimizer,
-                T_max=T_max,
+                T_max=scheduler_config.T_max,
                 eta_min=scheduler_config.eta_min
+            )
+            return {
+                "optimizer": optimizer,
+                "lr_scheduler": {
+                    "scheduler": scheduler,
+                    "interval": "epoch",
+                },
+            }
+        elif scheduler_config.type == "StepLR":
+            scheduler = torch.optim.lr_scheduler.StepLR(
+                optimizer,
+                step_size=scheduler_config.step_size,
+                gamma=scheduler_config.gamma
             )
             return {
                 "optimizer": optimizer,

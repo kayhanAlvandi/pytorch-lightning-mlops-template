@@ -68,6 +68,19 @@ def parse_args():
         default=None,
         help="Path to checkpoint to resume training from",
     )
+    parser.add_argument(
+        "--run-name",
+        type=str,
+        default=None,
+        help="Custom name for this run (for MLflow and TensorBoard)",
+    )
+    parser.add_argument(
+        "--tags",
+        type=str,
+        nargs="+",
+        default=None,
+        help="Tags for this run (e.g., --tags baseline shallow)",
+    )
     return parser.parse_args()
 
 
@@ -143,10 +156,15 @@ def main():
         learning_rate=config.training.learning_rate,
         weight_decay=config.training.weight_decay,
         dropout=config.model.dropout,
+        num_blocks=config.model.num_blocks,
+        base_channels=config.model.base_channels,
+        channel_multiplier=config.model.channel_multiplier,
+        hidden_dim=config.model.hidden_dim,
         class_names=datamodule.label_encoder.classes,
     )
     
-    # Store scheduler config in model for configure_optimizers
+    # Store optimizer and scheduler config in model for configure_optimizers
+    model._optimizer_config = config.training.optimizer
     model._scheduler_config = config.training.scheduler
     
     # Setup callbacks
@@ -170,15 +188,20 @@ def main():
     ]
     
     # Setup dual logging: TensorBoard for visualization + MLflow for tracking
+    # Use custom version name if provided
+    tb_version = args.run_name if args.run_name else None
+    
     tb_logger = TensorBoardLogger(
         save_dir="logs",
         name="image_classifier",
+        version=tb_version,
     )
     
     mlflow_logger = MLFlowLogger(
         experiment_name="image_classifier",
         tracking_uri="file:./mlruns",
         log_model=False,
+        run_name=args.run_name,
     )
     
     # Log all config parameters to MLflow
@@ -198,19 +221,35 @@ def main():
         "training.weight_decay": config.training.weight_decay,
         "model.name": config.model.name,
         "model.dropout": config.model.dropout,
+        "model.num_blocks": config.model.num_blocks,
+        "model.base_channels": config.model.base_channels,
+        "model.channel_multiplier": config.model.channel_multiplier,
+        "model.hidden_dim": config.model.hidden_dim,
         "seed": args.seed,
-        # Scheduler parameters from config
+        # Optimizer parameters
+        "optimizer.type": config.training.optimizer.type,
+        "optimizer.momentum": config.training.optimizer.momentum,
+        "optimizer.nesterov": config.training.optimizer.nesterov,
+        # Scheduler parameters
         "scheduler.type": config.training.scheduler.type,
         "scheduler.mode": config.training.scheduler.mode,
         "scheduler.factor": config.training.scheduler.factor,
         "scheduler.patience": config.training.scheduler.patience,
         "scheduler.T_max": config.training.scheduler.T_max,
         "scheduler.eta_min": config.training.scheduler.eta_min,
+        "scheduler.step_size": config.training.scheduler.step_size,
+        "scheduler.gamma": config.training.scheduler.gamma,
     })
     
     # Log config file as artifact
     import shutil
     mlflow_logger.experiment.log_artifact(mlflow_logger.run_id, args.config)
+    
+    # Add custom tags if provided
+    if args.tags:
+        for tag in args.tags:
+            mlflow_logger.experiment.set_tag(mlflow_logger.run_id, f"tag_{tag}", "true")
+        mlflow_logger.experiment.set_tag(mlflow_logger.run_id, "tags", ",".join(args.tags))
     
     log_best_callback = LogBestModelToMLflow(
         checkpoint_callback=checkpoint_callback,
