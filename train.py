@@ -15,6 +15,11 @@ from src.callbacks import LogBestModelToMLflow
 from src.config import Config
 from src.datamodule import MultiChannelDataModule
 from src.model import CNNClassifier
+from src.dataset_versioning import (
+    create_dataset_metadata,
+    create_dataset_manifest,
+    compute_dataset_version,
+)
 
 
 def parse_args():
@@ -139,6 +144,16 @@ def main():
     # Setup data module to get label encoder with num_classes
     datamodule.setup()
     num_classes = datamodule.label_encoder.num_classes
+    
+    # Get dataset sample counts
+    train_samples = len(datamodule.train_dataset)
+    val_samples = len(datamodule.val_dataset)
+    
+    print(f"\nDataset Statistics:")
+    print(f"  Training samples: {train_samples}")
+    print(f"  Validation samples: {val_samples}")
+    print(f"  Total samples: {train_samples + val_samples}")
+    print(f"  Number of classes: {num_classes}")
 
     # Prepare example input for MLflow logging callback (single sample from val loader)
     val_loader = datamodule.val_dataloader()
@@ -250,6 +265,68 @@ def main():
         for tag in args.tags:
             mlflow_logger.experiment.set_tag(mlflow_logger.run_id, f"tag_{tag}", "true")
         mlflow_logger.experiment.set_tag(mlflow_logger.run_id, "tags", ",".join(args.tags))
+    
+    # Dataset versioning and tracking
+    print("\nCreating dataset metadata...")
+    dataset_metadata = create_dataset_metadata(
+        datamodule=datamodule,
+        config=config,
+        train_samples=train_samples,
+        val_samples=val_samples,
+    )
+    
+    # Log dataset version and metadata
+    mlflow_logger.experiment.set_tag(mlflow_logger.run_id, "dataset_version", dataset_metadata['dataset_version'])
+    mlflow_logger.log_hyperparams({
+        "dataset.version": dataset_metadata['dataset_version'],
+        "dataset.code_commit": dataset_metadata['dataset_code_commit'] or "unknown",
+        "dataset.config_hash": dataset_metadata['config_hash'],
+        "dataset.git_commit": dataset_metadata['git_commit'] or "unknown",
+        "dataset.has_uncommitted_changes": dataset_metadata['has_uncommitted_changes'],
+        "dataset.train_samples": dataset_metadata['train_samples'],
+        "dataset.val_samples": dataset_metadata['val_samples'],
+        "dataset.total_samples": dataset_metadata['total_samples'],
+        "dataset.num_classes": dataset_metadata['num_classes'],
+    })
+    
+    # Log full dataset metadata as artifact
+    import json
+    metadata_path = "dataset_metadata.json"
+    with open(metadata_path, 'w') as f:
+        json.dump(dataset_metadata, f, indent=2, default=str)
+    mlflow_logger.experiment.log_artifact(mlflow_logger.run_id, metadata_path)
+    
+    # Create and log dataset manifest (detailed sample list)
+    print("Creating dataset manifest...")
+    manifest_path = create_dataset_manifest(datamodule, output_path="dataset_manifest.json")
+    mlflow_logger.experiment.log_artifact(mlflow_logger.run_id, manifest_path)
+    
+    # Use MLflow Dataset API for proper dataset tracking
+    try:
+        import mlflow
+        import pandas as pd
+        
+        # Create a summary DataFrame for MLflow Dataset API
+        dataset_summary = pd.DataFrame([{
+            'split': 'train',
+            'num_samples': train_samples,
+            'num_classes': num_classes,
+        }, {
+            'split': 'val',
+            'num_samples': val_samples,
+            'num_classes': num_classes,
+        }])
+        
+        # Log as MLflow dataset
+        dataset = mlflow.data.from_pandas(
+            dataset_summary,
+            source=config.data.root_dir,
+            name=f"microscopy_dataset_{dataset_metadata['dataset_version']}",
+        )
+        mlflow_logger.experiment.log_input(mlflow_logger.run_id, dataset, context="training")
+        print(f"✓ Dataset tracked with version: {dataset_metadata['dataset_version']}")
+    except Exception as e:
+        print(f"⚠ Warning: Could not log dataset with MLflow Dataset API: {e}")
     
     log_best_callback = LogBestModelToMLflow(
         checkpoint_callback=checkpoint_callback,
