@@ -97,3 +97,7 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+# Dataset metadata
+dataset_metadata.json
+dataset_manifest.json

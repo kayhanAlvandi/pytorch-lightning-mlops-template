@@ -65,13 +65,55 @@ class LogBestModelToMLflow(Callback):
             started_run = True
 
         try:
-            mlflow.pytorch.log_model(
+            model_info = mlflow.pytorch.log_model(
                 model,
                 artifact_path=self.artifact_path,
                 signature=signature,
                 input_example=example_input.cpu().numpy(),
                 registered_model_name=self.registered_model_name,
             )
+            
+            # Add description and tags to the registered model version
+            try:
+                from mlflow.tracking import MlflowClient
+                client = MlflowClient()
+                
+                # Get the version that was just registered
+                model_version = model_info.registered_model_version
+                
+                # Build description from model hyperparams
+                hp = pl_module.hparams
+                num_blocks = hp.get('num_blocks', '?')
+                base_channels = hp.get('base_channels', '?')
+                channel_multiplier = hp.get('channel_multiplier', '?')
+                hidden_dim = hp.get('hidden_dim', '?')
+                run_name = self.mlflow_logger.experiment.get_run(run_id).info.run_name or run_id[:8]
+                
+                description = (
+                    f"Run: {run_name}\n"
+                    f"Architecture: {num_blocks} blocks, {base_channels} base_ch, "
+                    f"x{channel_multiplier} growth, {hidden_dim} hidden\n"
+                    f"Val score: {current_best:.4f}\n"
+                    f"in_channels={hp.get('in_channels','?')}, "
+                    f"num_classes={hp.get('num_classes','?')}, "
+                    f"dropout={hp.get('dropout','?')}"
+                )
+                client.update_model_version(
+                    name=self.registered_model_name,
+                    version=model_version,
+                    description=description,
+                )
+                
+                # Add searchable tags to the model version
+                client.set_model_version_tag(self.registered_model_name, model_version, "run_name", run_name)
+                client.set_model_version_tag(self.registered_model_name, model_version, "num_blocks", str(num_blocks))
+                client.set_model_version_tag(self.registered_model_name, model_version, "base_channels", str(base_channels))
+                client.set_model_version_tag(self.registered_model_name, model_version, "channel_multiplier", str(channel_multiplier))
+                client.set_model_version_tag(self.registered_model_name, model_version, "hidden_dim", str(hidden_dim))
+                client.set_model_version_tag(self.registered_model_name, model_version, "val_score", f"{current_best:.4f}")
+            except Exception as tag_err:
+                rank_zero_info(f"LogBestModelToMLflow: Could not set model version description/tags: {tag_err}")
+            
             self.logged = True
             rank_zero_info(
                 f"LogBestModelToMLflow: Logged best model (score={current_best:.4f})."

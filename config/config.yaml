@@ -27,12 +27,12 @@ dataloader:
   use_tiling: true
   verbose: true
 model:
-  base_channels: 16
-  channel_multiplier: 3
+  base_channels: 32
+  channel_multiplier: 2
   dropout: 0.5
-  hidden_dim: 64
+  hidden_dim: 128
   name: SimpleCNN
-  num_blocks: 2
+  num_blocks: 4
 training:
   learning_rate: 0.0001
   max_epochs: 100

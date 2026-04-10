@@ -19,6 +19,8 @@ from src.dataset_versioning import (
     create_dataset_metadata,
     create_dataset_manifest,
     compute_dataset_version,
+    get_git_commit_for_model_files,
+    check_model_uncommitted_changes,
 )
 
 
@@ -219,6 +221,11 @@ def main():
         run_name=args.run_name,
     )
     
+    # Log model code version
+    model_code_commit = get_git_commit_for_model_files()
+    if check_model_uncommitted_changes():
+        print("⚠ Warning: model.py has uncommitted changes - reproducibility not guaranteed!")
+    
     # Log all config parameters to MLflow
     mlflow_logger.log_hyperparams({
         "data.root_dir": config.data.root_dir,
@@ -240,6 +247,7 @@ def main():
         "model.base_channels": config.model.base_channels,
         "model.channel_multiplier": config.model.channel_multiplier,
         "model.hidden_dim": config.model.hidden_dim,
+        "model.code_commit": model_code_commit or "unknown",
         "seed": args.seed,
         # Optimizer parameters
         "optimizer.type": config.training.optimizer.type,
@@ -281,7 +289,6 @@ def main():
         "dataset.version": dataset_metadata['dataset_version'],
         "dataset.code_commit": dataset_metadata['dataset_code_commit'] or "unknown",
         "dataset.config_hash": dataset_metadata['config_hash'],
-        "dataset.git_commit": dataset_metadata['git_commit'] or "unknown",
         "dataset.has_uncommitted_changes": dataset_metadata['has_uncommitted_changes'],
         "dataset.train_samples": dataset_metadata['train_samples'],
         "dataset.val_samples": dataset_metadata['val_samples'],
@@ -317,16 +324,19 @@ def main():
             'num_classes': num_classes,
         }])
         
-        # Log as MLflow dataset
-        dataset = mlflow.data.from_pandas(
-            dataset_summary,
-            source=config.data.root_dir,
-            name=f"microscopy_dataset_{dataset_metadata['dataset_version']}",
-        )
-        mlflow_logger.experiment.log_input(mlflow_logger.run_id, dataset, context="training")
-        print(f"✓ Dataset tracked with version: {dataset_metadata['dataset_version']}")
+        # Log as MLflow dataset (must be within active run context)
+        with mlflow.start_run(run_id=mlflow_logger.run_id):
+            dataset = mlflow.data.from_pandas(
+                dataset_summary,
+                source=config.data.root_dir,
+                name=f"microscopy_dataset_{dataset_metadata['dataset_version']}",
+            )
+            mlflow.log_input(dataset, context="training")
+            print(f"✓ Dataset tracked with version: {dataset_metadata['dataset_version']}")
     except Exception as e:
         print(f"⚠ Warning: Could not log dataset with MLflow Dataset API: {e}")
+        import traceback
+        traceback.print_exc()
     
     log_best_callback = LogBestModelToMLflow(
         checkpoint_callback=checkpoint_callback,

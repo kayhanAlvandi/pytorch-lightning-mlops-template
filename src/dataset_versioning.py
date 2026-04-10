@@ -6,6 +6,35 @@ from typing import Dict, List, Any, Optional
 import subprocess
 
 
+def get_git_commit_for_model_files() -> Optional[str]:
+    """Get the last git commit hash that modified model-related files."""
+    model_files = [
+        'src/model.py',
+    ]
+    
+    try:
+        git_hash = subprocess.check_output(
+            ['git', 'log', '-1', '--format=%H', '--'] + model_files,
+            stderr=subprocess.DEVNULL
+        ).decode('ascii').strip()
+        return git_hash if git_hash else None
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return None
+
+
+def check_model_uncommitted_changes() -> bool:
+    """Check if there are uncommitted changes to model files."""
+    model_files = ['src/model.py']
+    try:
+        result = subprocess.check_output(
+            ['git', 'status', '--porcelain', '--'] + model_files,
+            stderr=subprocess.DEVNULL
+        ).decode('ascii').strip()
+        return len(result) > 0
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return False
+
+
 def get_git_commit_for_dataset_files() -> Optional[str]:
     """Get the last git commit hash that modified dataset-related files."""
     dataset_files = [
@@ -103,11 +132,10 @@ def create_dataset_metadata(
     # Collect wells used (if available)
     wells_used = []
     if hasattr(datamodule, 'train_dataset') and hasattr(datamodule.train_dataset, 'samples'):
-        # Extract unique wells from samples
         wells_set = set()
         for sample in datamodule.train_dataset.samples:
-            if hasattr(sample, 'well'):
-                wells_set.add(sample.well)
+            if isinstance(sample, dict) and 'well' in sample:
+                wells_set.add(f"{sample['plate']}/{sample['well']}")
         wells_used = sorted(list(wells_set))
     
     config_dict = {
@@ -172,20 +200,24 @@ def create_dataset_manifest(
     
     # Collect train samples
     if hasattr(datamodule, 'train_dataset'):
-        for idx, (image_path, label) in enumerate(datamodule.train_dataset.samples):
+        for idx, sample in enumerate(datamodule.train_dataset.samples):
             manifest['train_samples'].append({
                 'index': idx,
-                'path': str(image_path),
-                'label': int(label),
+                'plate': sample['plate'],
+                'well': sample['well'],
+                'field': sample['field'],
+                'label': sample['label'],
             })
     
     # Collect val samples
     if hasattr(datamodule, 'val_dataset'):
-        for idx, (image_path, label) in enumerate(datamodule.val_dataset.samples):
+        for idx, sample in enumerate(datamodule.val_dataset.samples):
             manifest['val_samples'].append({
                 'index': idx,
-                'path': str(image_path),
-                'label': int(label),
+                'plate': sample['plate'],
+                'well': sample['well'],
+                'field': sample['field'],
+                'label': sample['label'],
             })
     
     # Save manifest
