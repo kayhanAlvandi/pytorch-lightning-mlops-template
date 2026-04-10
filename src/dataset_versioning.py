@@ -134,9 +134,13 @@ def create_dataset_metadata(
     if hasattr(datamodule, 'train_dataset') and hasattr(datamodule.train_dataset, 'samples'):
         wells_set = set()
         for sample in datamodule.train_dataset.samples:
-            if isinstance(sample, dict) and 'well' in sample:
+            if isinstance(sample, dict) and ('plate' in sample) and ('well' in sample):
                 wells_set.add(f"{sample['plate']}/{sample['well']}")
         wells_used = sorted(list(wells_set))
+        
+        if not wells_used and len(datamodule.train_dataset.samples) > 0:
+            # Debug: print first sample structure if wells_used is empty
+            print(f"⚠ Warning: Could not extract wells. First sample structure: {list(datamodule.train_dataset.samples[0].keys())}")
     
     config_dict = {
         'data': {
