@@ -65,9 +65,17 @@ class LogBestModelToMLflow(Callback):
             started_run = True
 
         try:
+            run_name = self.mlflow_logger.experiment.get_run(run_id).info.run_name or run_id[:8]
+            # Sanitize run name for use as artifact path
+            safe_run_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in run_name)
+            artifact_path = f"{self.artifact_path}_{safe_run_name}"
+
+            # Log raw checkpoint file first so it can be retrieved for training resumption
+            mlflow.log_artifact(best_path, artifact_path="checkpoints")
+
             model_info = mlflow.pytorch.log_model(
                 model,
-                artifact_path=self.artifact_path,
+                artifact_path=artifact_path,
                 signature=signature,
                 input_example=example_input.cpu().numpy(),
                 registered_model_name=self.registered_model_name,
@@ -87,8 +95,6 @@ class LogBestModelToMLflow(Callback):
                 base_channels = hp.get('base_channels', '?')
                 channel_multiplier = hp.get('channel_multiplier', '?')
                 hidden_dim = hp.get('hidden_dim', '?')
-                run_name = self.mlflow_logger.experiment.get_run(run_id).info.run_name or run_id[:8]
-                
                 description = (
                     f"Run: {run_name}\n"
                     f"Architecture: {num_blocks} blocks, {base_channels} base_ch, "

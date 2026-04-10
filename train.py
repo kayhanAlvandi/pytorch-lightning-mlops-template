@@ -76,6 +76,12 @@ def parse_args():
         help="Path to checkpoint to resume training from",
     )
     parser.add_argument(
+        "--resume-from-model",
+        type=str,
+        default=None,
+        help="Resume training from MLflow registered model, e.g. 'SimpleCNN/11' or 'models:/SimpleCNN/latest'",
+    )
+    parser.add_argument(
         "--run-name",
         type=str,
         default=None,
@@ -89,6 +95,59 @@ def parse_args():
         help="Tags for this run (e.g., --tags baseline shallow)",
     )
     return parser.parse_args()
+
+
+def get_checkpoint_from_mlflow_model(model_ref: str) -> str:
+    """
+    Download checkpoint artifact from an MLflow registered model version.
+
+    Args:
+        model_ref: 'ModelName/version' e.g. 'SimpleCNN/11', or 'models:/SimpleCNN/11'
+                   Use 'latest' as version to get the most recent version.
+
+    Returns:
+        Local path to downloaded .ckpt file.
+    """
+    import mlflow
+    from mlflow.tracking import MlflowClient
+
+    client = MlflowClient(tracking_uri="file:./mlruns")
+
+    # Parse model reference
+    ref = model_ref.removeprefix("models:/")
+    parts = ref.split("/")
+    model_name = parts[0]
+    version = parts[1] if len(parts) > 1 else "latest"
+
+    if version == "latest":
+        versions = client.get_latest_versions(model_name)
+        if not versions:
+            raise ValueError(f"No versions found for registered model '{model_name}'")
+        version = versions[0].version
+        print(f"Resolved 'latest' to version {version} for model '{model_name}'")
+
+    mv = client.get_model_version(model_name, version)
+    run_id = mv.run_id
+    print(f"Resuming from {model_name} v{version} (run_id={run_id[:8]}...)")
+
+    # Download the checkpoint artifact logged under 'checkpoints/'
+    try:
+        artifacts = client.list_artifacts(run_id, path="checkpoints")
+        if not artifacts:
+            raise FileNotFoundError("No files found under 'checkpoints/' artifact path")
+        ckpt_filename = artifacts[0].path  # e.g. 'checkpoints/epoch=5-step=100.ckpt'
+        local_dir = mlflow.artifacts.download_artifacts(
+            run_id=run_id,
+            artifact_path=ckpt_filename,
+            tracking_uri="file:./mlruns",
+        )
+        print(f"Downloaded checkpoint: {local_dir}")
+        return local_dir
+    except Exception as e:
+        raise RuntimeError(
+            f"Could not download checkpoint for {model_name}/v{version}: {e}\n"
+            "Make sure the model was logged with LogBestModelToMLflow after this feature was added."
+        ) from e
 
 
 def main():
@@ -362,19 +421,32 @@ def main():
         gradient_clip_val=1e4,  # Clip gradients to prevent spikes
     )
     
+    # Resolve checkpoint path (local file or MLflow registered model)
+    ckpt_path = args.ckpt
+    if args.resume_from_model:
+        if ckpt_path:
+            raise ValueError("Cannot use both --ckpt and --resume-from-model at the same time.")
+        ckpt_path = get_checkpoint_from_mlflow_model(args.resume_from_model)
+
     # Train
     print("\nStarting training...")
-    if args.ckpt:
-        print(f"Resuming from checkpoint: {args.ckpt}")
-    trainer.fit(model, datamodule, ckpt_path=args.ckpt)
+    if ckpt_path:
+        print(f"Resuming from checkpoint: {ckpt_path}")
+    trainer.fit(model, datamodule, ckpt_path=ckpt_path)
     
     # Test with best model
     print("\nTesting with best model...")
     trainer.test(model, datamodule, ckpt_path="best")
     
+    # Clean up current checkpoint after it's been logged to MLflow and tested
+    best_ckpt_path = trainer.checkpoint_callback.best_model_path
+    if best_ckpt_path and Path(best_ckpt_path).exists():
+        Path(best_ckpt_path).unlink()
+        print(f"Cleaned up local checkpoint: {best_ckpt_path}")
+    
     print("\nTraining complete!")
     best_ckpt_path = trainer.checkpoint_callback.best_model_path
-    print(f"Best model saved at: {best_ckpt_path}")
+    print(f"Best model was at: {best_ckpt_path} (now deleted, stored in MLflow)")
     print("Best model logging handled automatically by LogBestModelToMLflow callback.")
     print(f"\nMLflow tracking URI: {mlflow_logger.experiment.tracking_uri}")
     print(f"MLflow run ID: {mlflow_logger.run_id}")
