@@ -229,16 +229,56 @@ class CNNClassifier(pl.LightningModule):
         """Log confusion matrix and sample images at end of validation."""
         # Log confusion matrix
         confmat = self.val_confmat.compute().cpu().numpy()
-        fig = self._plot_confusion_matrix(confmat)
-        self.logger.experiment.add_figure("val/confusion_matrix", fig, self.current_epoch)
-        plt.close(fig)
+        fig_cm = self._plot_confusion_matrix(confmat)
+        
+        # Log to TensorBoard
+        if hasattr(self.logger, 'experiment') and hasattr(self.logger.experiment, 'add_figure'):
+            self.logger.experiment.add_figure("val/confusion_matrix", fig_cm, self.current_epoch)
+        
+        # Log to MLflow
+        self._log_figure_to_mlflow(fig_cm, f"confusion_matrix_epoch_{self.current_epoch}.png")
+        plt.close(fig_cm)
         self.val_confmat.reset()
         
         # Log sample images with predictions
         if len(self.val_images) > 0:
-            fig = self._plot_predictions(self.val_images, self.val_preds, self.val_labels)
-            self.logger.experiment.add_figure("val/predictions", fig, self.current_epoch)
-            plt.close(fig)
+            fig_pred = self._plot_predictions(self.val_images, self.val_preds, self.val_labels)
+            
+            # Log to TensorBoard
+            if hasattr(self.logger, 'experiment') and hasattr(self.logger.experiment, 'add_figure'):
+                self.logger.experiment.add_figure("val/predictions", fig_pred, self.current_epoch)
+            
+            # Log to MLflow
+            self._log_figure_to_mlflow(fig_pred, f"predictions_epoch_{self.current_epoch}.png")
+            plt.close(fig_pred)
+    
+    def _log_figure_to_mlflow(self, fig: plt.Figure, filename: str) -> None:
+        """Log a matplotlib figure to MLflow if MLflow logger is available."""
+        try:
+            import tempfile
+            import os
+            from pytorch_lightning.loggers import MLFlowLogger
+            
+            # Find MLflow logger from trainer's loggers
+            mlflow_logger = None
+            if self.trainer and self.trainer.loggers:
+                for logger in self.trainer.loggers:
+                    if isinstance(logger, MLFlowLogger):
+                        mlflow_logger = logger
+                        break
+            
+            if mlflow_logger:
+                # Save figure to temp file and log as artifact
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    filepath = os.path.join(tmpdir, filename)
+                    fig.savefig(filepath, dpi=100, bbox_inches='tight')
+                    mlflow_logger.experiment.log_artifact(
+                        mlflow_logger.run_id, 
+                        filepath, 
+                        artifact_path="figures"
+                    )
+        except Exception:
+            pass  # Silently skip if MLflow logging fails
     
     def _plot_confusion_matrix(self, confmat: np.ndarray) -> plt.Figure:
         """Create confusion matrix figure."""

@@ -280,6 +280,10 @@ def main():
         run_name=args.run_name,
     )
     
+    # Enable system metrics logging (CPU, GPU, memory usage)
+    import mlflow
+    mlflow.enable_system_metrics_logging()
+    
     # Log model code version
     model_code_commit = get_git_commit_for_model_files()
     if check_model_uncommitted_changes():
