@@ -1,0 +1,7 @@
+_target_: src.model.CNNClassifier
+name: SimpleCNN
+dropout: 0.5
+num_blocks: 4
+base_channels: 32
+channel_multiplier: 2.0
+hidden_dim: 256

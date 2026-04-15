@@ -1,8 +1,13 @@
 """Training script for CNN classifier."""
-import argparse
+import json
 from pathlib import Path
+
+import hydra
+import mlflow
+import pandas as pd
 import torch
 import pytorch_lightning as pl
+from omegaconf import DictConfig, OmegaConf
 from pytorch_lightning.callbacks import (
     ModelCheckpoint,
     EarlyStopping,
@@ -12,7 +17,6 @@ from pytorch_lightning.callbacks import (
 from pytorch_lightning.loggers import TensorBoardLogger, MLFlowLogger
 
 from src.callbacks import LogBestModelToMLflow
-from src.config import Config
 from src.datamodule import MultiChannelDataModule
 from src.model import CNNClassifier
 from src.dataset_versioning import (
@@ -24,94 +28,21 @@ from src.dataset_versioning import (
 )
 
 
-def parse_args():
-    parser = argparse.ArgumentParser(description="Train CNN classifier")
-    parser.add_argument(
-        "--config",
-        type=str,
-        default="config/config.yaml",
-        help="Path to configuration file",
-    )
-    parser.add_argument(
-        "--channels",
-        type=int,
-        nargs="+",
-        default=None,
-        help="Override channels from config (e.g., --channels 1 2 3)",
-    )
-    parser.add_argument(
-        "--batch-size",
-        type=int,
-        default=None,
-        help="Override batch size from config",
-    )
-    parser.add_argument(
-        "--epochs",
-        type=int,
-        default=None,
-        help="Override max epochs from config",
-    )
-    parser.add_argument(
-        "--lr",
-        type=float,
-        default=None,
-        help="Override learning rate from config",
-    )
-    parser.add_argument(
-        "--crop-size",
-        type=int,
-        default=None,
-        help="Override crop size from config",
-    )
-    parser.add_argument(
-        "--seed",
-        type=int,
-        default=42,
-        help="Random seed for reproducibility",
-    )
-    parser.add_argument(
-        "--ckpt",
-        type=str,
-        default=None,
-        help="Path to checkpoint to resume training from",
-    )
-    parser.add_argument(
-        "--resume-from-model",
-        type=str,
-        default=None,
-        help="Resume training from MLflow registered model, e.g. 'SimpleCNN/11' or 'models:/SimpleCNN/latest'",
-    )
-    parser.add_argument(
-        "--run-name",
-        type=str,
-        default=None,
-        help="Custom name for this run (for MLflow and TensorBoard)",
-    )
-    parser.add_argument(
-        "--tags",
-        type=str,
-        nargs="+",
-        default=None,
-        help="Tags for this run (e.g., --tags baseline shallow)",
-    )
-    return parser.parse_args()
-
-
-def get_checkpoint_from_mlflow_model(model_ref: str) -> str:
+def get_checkpoint_from_mlflow_model(model_ref: str, tracking_uri: str = "file:./mlruns") -> str:
     """
     Download checkpoint artifact from an MLflow registered model version.
 
     Args:
         model_ref: 'ModelName/version' e.g. 'SimpleCNN/11', or 'models:/SimpleCNN/11'
                    Use 'latest' as version to get the most recent version.
+        tracking_uri: MLflow tracking URI.
 
     Returns:
         Local path to downloaded .ckpt file.
     """
-    import mlflow
     from mlflow.tracking import MlflowClient
 
-    client = MlflowClient(tracking_uri="file:./mlruns")
+    client = MlflowClient(tracking_uri=tracking_uri)
 
     # Parse model reference
     ref = model_ref.removeprefix("models:/")
@@ -139,7 +70,7 @@ def get_checkpoint_from_mlflow_model(model_ref: str) -> str:
         local_dir = mlflow.artifacts.download_artifacts(
             run_id=run_id,
             artifact_path=ckpt_filename,
-            tracking_uri="file:./mlruns",
+            tracking_uri=tracking_uri,
         )
         print(f"Downloaded checkpoint: {local_dir}")
         return local_dir
@@ -150,56 +81,35 @@ def get_checkpoint_from_mlflow_model(model_ref: str) -> str:
         ) from e
 
 
-def main():
-    args = parse_args()
-    
-    # Set seed for reproducibility
-    pl.seed_everything(args.seed)
-    torch.set_float32_matmul_precision('medium')  # Enable Tensor Cores
-    
-    # Load configuration
-    config = Config.from_yaml(args.config)
-    
-    # Override config with command line arguments
-    if args.channels is not None:
-        config.data.channels = args.channels
-    if args.batch_size is not None:
-        config.dataloader.batch_size = args.batch_size
-    if args.epochs is not None:
-        config.training.max_epochs = args.epochs
-    if args.lr is not None:
-        config.training.learning_rate = args.lr
-    if args.crop_size is not None:
-        config.data.crop_size = args.crop_size
-    
+@hydra.main(config_path="configs", config_name="config", version_base=None)
+def main(cfg: DictConfig):
+    # Print resolved config
     print("=" * 60)
     print("Configuration:")
-    print(f"  Data root: {config.data.root_dir}")
-    print(f"  Channels: {config.data.channels}")
-    print(f"  Crop size: {config.data.crop_size}")
-    print(f"  Batch size: {config.dataloader.batch_size}")
-    print(f"  Max epochs: {config.training.max_epochs}")
-    print(f"  Learning rate: {config.training.learning_rate}")
-    print(f"  Use MongoDB: {config.dataloader.use_mongodb}")
+    print(OmegaConf.to_yaml(cfg))
     print("=" * 60)
+    
+    # Set seed for reproducibility
+    pl.seed_everything(cfg.seed)
+    torch.set_float32_matmul_precision('medium')  # Enable Tensor Cores
+    
+    # Convert exclude_wells from list of lists to list of tuples
+    exclude_wells = None
+    if cfg.datamodule.exclude_wells is not None:
+        exclude_wells = [
+            tuple(w) for w in OmegaConf.to_container(cfg.datamodule.exclude_wells)
+        ]
     
     # Create data module
     datamodule = MultiChannelDataModule(
-        root_dir=config.data.root_dir,
-        channels=config.data.channels,
-        crop_size=config.data.crop_size,
-        batch_size=config.dataloader.batch_size,
-        num_workers=config.dataloader.num_workers,
-        pin_memory=config.dataloader.pin_memory,
-        train_val_split=config.dataloader.train_val_split,
-        use_mongodb=config.dataloader.use_mongodb,
-        use_tiling=config.dataloader.use_tiling,
-        tile_stride=config.dataloader.tile_stride,
-        cache_size=config.dataloader.cache_size,
-        max_wells_per_label=config.dataloader.max_wells_per_label,
-        max_samples_per_label=config.dataloader.max_samples_per_label,
-        verbose=config.dataloader.verbose,
-        exclude_wells=config.dataloader.exclude_wells,
+        dataset_cfg=cfg.datamodule.dataset,
+        batch_size=cfg.datamodule.batch_size,
+        num_workers=cfg.datamodule.num_workers,
+        pin_memory=cfg.datamodule.pin_memory,
+        train_val_split=cfg.datamodule.train_val_split,
+        use_mongodb=cfg.datamodule.use_mongodb,
+        max_wells_per_label=cfg.datamodule.max_wells_per_label,
+        exclude_wells=exclude_wells,
     )
     
     # Setup data module to get label encoder with num_classes
@@ -227,61 +137,62 @@ def main():
     
     # Create model
     model = CNNClassifier(
-        in_channels=len(config.data.channels),
+        in_channels=len(cfg.datamodule.dataset.channels),
         num_classes=num_classes,
-        learning_rate=config.training.learning_rate,
-        weight_decay=config.training.weight_decay,
-        dropout=config.model.dropout,
-        num_blocks=config.model.num_blocks,
-        base_channels=config.model.base_channels,
-        channel_multiplier=config.model.channel_multiplier,
-        hidden_dim=config.model.hidden_dim,
+        learning_rate=cfg.training.learning_rate,
+        weight_decay=cfg.training.weight_decay,
+        dropout=cfg.model.dropout,
+        num_blocks=cfg.model.num_blocks,
+        base_channels=cfg.model.base_channels,
+        channel_multiplier=cfg.model.channel_multiplier,
+        hidden_dim=cfg.model.hidden_dim,
         class_names=datamodule.label_encoder.classes,
     )
     
     # Store optimizer and scheduler config in model for configure_optimizers
-    model._optimizer_config = config.training.optimizer
-    model._scheduler_config = config.training.scheduler
+    model._optimizer_config = cfg.optimizer
+    model._scheduler_config = cfg.optimizer.scheduler
     
     # Setup callbacks
     checkpoint_callback = ModelCheckpoint(
-        dirpath="checkpoints",
-        filename="cnn-{epoch:02d}-{val_acc:.4f}",
-        monitor="val/acc",
-        mode="max",
-        save_top_k=1,
-        save_last=True,
+        dirpath=cfg.callbacks.checkpoint.dirpath,
+        filename=cfg.callbacks.checkpoint.filename,
+        monitor=cfg.callbacks.checkpoint.monitor,
+        mode=cfg.callbacks.checkpoint.mode,
+        save_top_k=cfg.callbacks.checkpoint.save_top_k,
+        save_last=cfg.callbacks.checkpoint.save_last,
     )
     callbacks = [
         checkpoint_callback,
-        # EarlyStopping(
-        #     monitor="val/loss",
-        #     patience=10,
-        #     mode="min",
-        # ),
         LearningRateMonitor(logging_interval="epoch"),
         RichProgressBar(),
     ]
     
+    # Add early stopping if enabled
+    if cfg.callbacks.early_stopping.enabled:
+        callbacks.append(EarlyStopping(
+            monitor=cfg.callbacks.early_stopping.monitor,
+            patience=cfg.callbacks.early_stopping.patience,
+            mode=cfg.callbacks.early_stopping.mode,
+        ))
+    
     # Setup dual logging: TensorBoard for visualization + MLflow for tracking
-    # Use custom version name if provided
-    tb_version = args.run_name if args.run_name else None
+    tb_version = cfg.run_name if cfg.run_name else None
     
     tb_logger = TensorBoardLogger(
-        save_dir="logs",
-        name="image_classifier",
+        save_dir=cfg.trainer.logger.tensorboard.save_dir,
+        name=cfg.trainer.logger.tensorboard.name,
         version=tb_version,
     )
     
     mlflow_logger = MLFlowLogger(
-        experiment_name="image_classifier",
-        tracking_uri="file:./mlruns",
+        experiment_name=cfg.trainer.logger.mlflow.experiment_name,
+        tracking_uri=cfg.trainer.logger.mlflow.tracking_uri,
         log_model=False,
-        run_name=args.run_name,
+        run_name=cfg.run_name,
     )
     
     # Enable system metrics logging (CPU, GPU, memory usage)
-    import mlflow
     mlflow.enable_system_metrics_logging()
     
     # Log model code version
@@ -289,59 +200,60 @@ def main():
     if check_model_uncommitted_changes():
         print("⚠ Warning: model.py has uncommitted changes - reproducibility not guaranteed!")
     
-    # Log all config parameters to MLflow
-    mlflow_logger.log_hyperparams({
-        "data.root_dir": config.data.root_dir,
-        "data.channels": config.data.channels,
-        "data.crop_size": config.data.crop_size,
-        "dataloader.batch_size": config.dataloader.batch_size,
-        "dataloader.num_workers": config.dataloader.num_workers,
-        "dataloader.train_val_split": config.dataloader.train_val_split,
-        "dataloader.use_tiling": config.dataloader.use_tiling,
-        "dataloader.cache_size": config.dataloader.cache_size,
-        "dataloader.max_wells_per_label": config.dataloader.max_wells_per_label,
-        "dataloader.max_samples_per_label": config.dataloader.max_samples_per_label,
-        "training.max_epochs": config.training.max_epochs,
-        "training.learning_rate": config.training.learning_rate,
-        "training.weight_decay": config.training.weight_decay,
-        "model.name": config.model.name,
-        "model.dropout": config.model.dropout,
-        "model.num_blocks": config.model.num_blocks,
-        "model.base_channels": config.model.base_channels,
-        "model.channel_multiplier": config.model.channel_multiplier,
-        "model.hidden_dim": config.model.hidden_dim,
+    # Log all config parameters to MLflow (flatten the Hydra config)
+    flat_cfg = {
+        "datamodule.dataset._target_": cfg.datamodule.dataset._target_,
+        "datamodule.dataset.root_dir": cfg.datamodule.dataset.root_dir,
+        "datamodule.dataset.channels": str(list(cfg.datamodule.dataset.channels)),
+        "datamodule.dataset.crop_size": cfg.datamodule.dataset.crop_size,
+        "datamodule.batch_size": cfg.datamodule.batch_size,
+        "datamodule.num_workers": cfg.datamodule.num_workers,
+        "datamodule.train_val_split": cfg.datamodule.train_val_split,
+        "datamodule.max_wells_per_label": cfg.datamodule.max_wells_per_label,
+        "training.max_epochs": cfg.training.max_epochs,
+        "training.learning_rate": cfg.training.learning_rate,
+        "training.weight_decay": cfg.training.weight_decay,
+        "model.name": cfg.model.name,
+        "model.dropout": cfg.model.dropout,
+        "model.num_blocks": cfg.model.num_blocks,
+        "model.base_channels": cfg.model.base_channels,
+        "model.channel_multiplier": cfg.model.channel_multiplier,
+        "model.hidden_dim": cfg.model.hidden_dim,
         "model.code_commit": model_code_commit or "unknown",
-        "seed": args.seed,
-        # Optimizer parameters
-        "optimizer.type": config.training.optimizer.type,
-        "optimizer.momentum": config.training.optimizer.momentum,
-        "optimizer.nesterov": config.training.optimizer.nesterov,
-        # Scheduler parameters
-        "scheduler.type": config.training.scheduler.type,
-        "scheduler.mode": config.training.scheduler.mode,
-        "scheduler.factor": config.training.scheduler.factor,
-        "scheduler.patience": config.training.scheduler.patience,
-        "scheduler.T_max": config.training.scheduler.T_max,
-        "scheduler.eta_min": config.training.scheduler.eta_min,
-        "scheduler.step_size": config.training.scheduler.step_size,
-        "scheduler.gamma": config.training.scheduler.gamma,
-    })
+        "seed": cfg.seed,
+        "optimizer.type": cfg.optimizer.type,
+        "optimizer.momentum": cfg.optimizer.momentum,
+        "optimizer.nesterov": cfg.optimizer.nesterov,
+        "optimizer.scheduler.type": cfg.optimizer.scheduler.type,
+        "optimizer.scheduler.mode": cfg.optimizer.scheduler.mode,
+        "optimizer.scheduler.factor": cfg.optimizer.scheduler.factor,
+        "optimizer.scheduler.patience": cfg.optimizer.scheduler.patience,
+        "optimizer.scheduler.T_max": cfg.optimizer.scheduler.T_max,
+        "optimizer.scheduler.eta_min": cfg.optimizer.scheduler.eta_min,
+        "optimizer.scheduler.step_size": cfg.optimizer.scheduler.step_size,
+        "optimizer.scheduler.gamma": cfg.optimizer.scheduler.gamma,
+    }
+    mlflow_logger.log_hyperparams(flat_cfg)
     
-    # Log config file as artifact
-    import shutil
-    mlflow_logger.experiment.log_artifact(mlflow_logger.run_id, args.config)
+    # Log full Hydra config as artifact
+    config_artifact_path = "hydra_config.yaml"
+    with open(config_artifact_path, "w") as f:
+        f.write(OmegaConf.to_yaml(cfg))
+    mlflow_logger.experiment.log_artifact(mlflow_logger.run_id, config_artifact_path)
+    Path(config_artifact_path).unlink()  # Clean up temp file
     
     # Add custom tags if provided
-    if args.tags:
-        for tag in args.tags:
+    if cfg.tags:
+        tags = list(cfg.tags)
+        for tag in tags:
             mlflow_logger.experiment.set_tag(mlflow_logger.run_id, f"tag_{tag}", "true")
-        mlflow_logger.experiment.set_tag(mlflow_logger.run_id, "tags", ",".join(args.tags))
+        mlflow_logger.experiment.set_tag(mlflow_logger.run_id, "tags", ",".join(tags))
     
     # Dataset versioning and tracking
     print("\nCreating dataset metadata...")
     dataset_metadata = create_dataset_metadata(
         datamodule=datamodule,
-        config=config,
+        config=cfg,
         train_samples=train_samples,
         val_samples=val_samples,
     )
@@ -360,7 +272,6 @@ def main():
     })
     
     # Log full dataset metadata as artifact
-    import json
     metadata_path = "dataset_metadata.json"
     with open(metadata_path, 'w') as f:
         json.dump(dataset_metadata, f, indent=2, default=str)
@@ -373,9 +284,6 @@ def main():
     
     # Use MLflow Dataset API for proper dataset tracking
     try:
-        import mlflow
-        import pandas as pd
-        
         # Create a summary DataFrame for MLflow Dataset API
         dataset_summary = pd.DataFrame([{
             'split': 'train',
@@ -391,7 +299,7 @@ def main():
         with mlflow.start_run(run_id=mlflow_logger.run_id):
             dataset = mlflow.data.from_pandas(
                 dataset_summary,
-                source=config.data.root_dir,
+                source=cfg.datamodule.dataset.root_dir,
                 name=f"microscopy_dataset_{dataset_metadata['dataset_version']}",
             )
             mlflow.log_input(dataset, context="training")
@@ -405,7 +313,7 @@ def main():
         checkpoint_callback=checkpoint_callback,
         example_input=example_input,
         mlflow_logger=mlflow_logger,
-        registered_model_name=config.model.name,
+        registered_model_name=cfg.model.name,
         artifact_path="best_model",
     )
     callbacks.append(log_best_callback)
@@ -414,23 +322,26 @@ def main():
     
     # Create trainer
     trainer = pl.Trainer(
-        max_epochs=config.training.max_epochs,
+        max_epochs=cfg.training.max_epochs,
         callbacks=callbacks,
         logger=loggers,
-        accelerator="cuda",
-        devices=1,
-        precision="16-mixed",  # Mixed precision for faster training
-        log_every_n_steps=10,
-        deterministic=True,
-        gradient_clip_val=1e4,  # Clip gradients to prevent spikes
+        accelerator=cfg.trainer.accelerator,
+        devices=cfg.trainer.devices,
+        precision=cfg.trainer.precision,
+        log_every_n_steps=cfg.trainer.log_every_n_steps,
+        deterministic=cfg.trainer.deterministic,
+        gradient_clip_val=cfg.trainer.gradient_clip_val,
     )
     
     # Resolve checkpoint path (local file or MLflow registered model)
-    ckpt_path = args.ckpt
-    if args.resume_from_model:
+    ckpt_path = cfg.ckpt
+    if cfg.resume_from_model:
         if ckpt_path:
-            raise ValueError("Cannot use both --ckpt and --resume-from-model at the same time.")
-        ckpt_path = get_checkpoint_from_mlflow_model(args.resume_from_model)
+            raise ValueError("Cannot use both ckpt and resume_from_model at the same time.")
+        ckpt_path = get_checkpoint_from_mlflow_model(
+            cfg.resume_from_model,
+            tracking_uri=cfg.trainer.logger.mlflow.tracking_uri,
+        )
 
     # Train
     print("\nStarting training...")

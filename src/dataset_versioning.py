@@ -142,20 +142,30 @@ def create_dataset_metadata(
             # Debug: print first sample structure if wells_used is empty
             print(f"⚠ Warning: Could not extract wells. First sample structure: {list(datamodule.train_dataset.samples[0].keys())}")
     
+    # Convert OmegaConf containers to plain Python types for hashing
+    ds = config.datamodule.dataset  # dataset-level config
+    try:
+        from omegaconf import OmegaConf
+        channels = OmegaConf.to_container(ds.channels) if hasattr(ds.channels, '_metadata') else ds.channels
+        exclude_wells = OmegaConf.to_container(config.datamodule.exclude_wells) if config.datamodule.exclude_wells is not None and hasattr(config.datamodule.exclude_wells, '_metadata') else config.datamodule.exclude_wells
+    except ImportError:
+        channels = ds.channels
+        exclude_wells = config.datamodule.exclude_wells
+    
     config_dict = {
         'data': {
-            'root_dir': config.data.root_dir,
-            'channels': config.data.channels,
-            'crop_size': config.data.crop_size,
+            'root_dir': ds.root_dir,
+            'channels': list(channels) if channels else [],
+            'crop_size': ds.crop_size,
         },
         'dataloader': {
-            'batch_size': config.dataloader.batch_size,
-            'train_val_split': config.dataloader.train_val_split,
-            'use_tiling': config.dataloader.use_tiling,
-            'tile_stride': config.dataloader.tile_stride,
-            'max_wells_per_label': config.dataloader.max_wells_per_label,
-            'max_samples_per_label': config.dataloader.max_samples_per_label,
-            'exclude_wells': config.dataloader.exclude_wells,
+            'dataset_target': ds._target_,
+            'batch_size': config.datamodule.batch_size,
+            'train_val_split': config.datamodule.train_val_split,
+            'stride': getattr(ds, 'stride', None),
+            'max_wells_per_label': config.datamodule.max_wells_per_label,
+            'max_samples_per_label': getattr(ds, 'max_samples_per_label', None),
+            'exclude_wells': exclude_wells,
         }
     }
     
@@ -164,19 +174,19 @@ def create_dataset_metadata(
         'dataset_code_commit': get_git_commit_for_dataset_files(),
         'config_hash': compute_config_hash(config_dict),
         'has_uncommitted_changes': check_uncommitted_changes(),
-        'source_path': config.data.root_dir,
+        'source_path': ds.root_dir,
         'num_classes': label_encoder.num_classes,
         'class_names': label_encoder.classes,
         'train_samples': train_samples,
         'val_samples': val_samples,
         'total_samples': train_samples + val_samples,
-        'train_val_split': config.dataloader.train_val_split,
-        'channels': config.data.channels,
-        'crop_size': config.data.crop_size,
-        'use_tiling': config.dataloader.use_tiling,
-        'max_wells_per_label': config.dataloader.max_wells_per_label,
-        'max_samples_per_label': config.dataloader.max_samples_per_label,
-        'excluded_wells': config.dataloader.exclude_wells or [],
+        'train_val_split': config.datamodule.train_val_split,
+        'channels': list(channels) if channels else [],
+        'crop_size': ds.crop_size,
+        'dataset_type': ds._target_,
+        'max_wells_per_label': config.datamodule.max_wells_per_label,
+        'max_samples_per_label': getattr(ds, 'max_samples_per_label', None),
+        'excluded_wells': exclude_wells or [],
         'wells_used': wells_used,
     }
     

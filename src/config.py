@@ -1,143 +1,161 @@
-"""Configuration management for CNN classifier."""
+"""Configuration management for CNN classifier using Hydra structured configs."""
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
-from pathlib import Path
-import yaml
+from typing import List, Optional, Any
+
+from omegaconf import MISSING
+
+
+# ── Dataset configs (nested inside datamodule) ────────────────────────────
+@dataclass
+class TiledDatasetConfig:
+    _target_: str = "src.dataset.TiledMultiChannelDataset"
+    root_dir: str = MISSING
+    channels: List[int] = field(default_factory=lambda: [1, 2, 3, 4])
+    crop_size: int = 224
+    stride: Optional[int] = None
+    cache_size: int = 16
+    max_samples_per_label: Optional[int] = None
+    verbose: bool = False
 
 
 @dataclass
-class DataConfig:
-    root_dir: str
+class RandomCropDatasetConfig:
+    _target_: str = "src.dataset.MultiChannelImageDataset"
+    root_dir: str = MISSING
     channels: List[int] = field(default_factory=lambda: [1, 2, 3, 4])
     crop_size: int = 224
 
 
+# ── Datamodule (dataloader-level config + nested dataset) ─────────────────
 @dataclass
-class DataLoaderConfig:
+class DataModuleConfig:
+    _target_: str = "src.datamodule.MultiChannelDataModule"
+    dataset: Any = field(default_factory=TiledDatasetConfig)
     batch_size: int = 16
     num_workers: int = 4
     pin_memory: bool = True
     use_mongodb: bool = False
     train_val_split: float = 0.8
-    use_tiling: bool = True
-    tile_stride: Optional[int] = None
-    cache_size: int = 16
-    max_wells_per_label: Optional[int] = None  # Limit wells per label class
-    max_samples_per_label: Optional[int] = None  # Limit samples per label (balanced)
-    verbose: bool = False  # Print detailed sample selection info
-    exclude_wells: Optional[List[Tuple[str, str]]] = None  # Wells to exclude (corrupted)
+    max_wells_per_label: Optional[int] = None
+    exclude_wells: Optional[Any] = None
 
 
+# ── Model ──────────────────────────────────────────────────────────────────
 @dataclass
-class OptimizerConfig:
-    type: str = "Adam"  # Adam, AdamW, SGD
-    momentum: float = 0.9  # For SGD
-    nesterov: bool = True  # For SGD
+class ModelConfig:
+    _target_: str = "src.model.CNNClassifier"
+    name: str = "SimpleCNN"
+    dropout: float = 0.5
+    num_blocks: int = 4
+    base_channels: int = 32
+    channel_multiplier: float = 2.0
+    hidden_dim: int = 128
 
 
-@dataclass
-class SchedulerConfig:
-    type: str = "ReduceLROnPlateau"  # ReduceLROnPlateau, CosineAnnealingLR, StepLR, None
-    mode: str = "min"
-    factor: float = 0.5
-    patience: int = 5
-    T_max: int = 100  # For CosineAnnealingLR
-    eta_min: float = 1e-6  # For CosineAnnealingLR
-    step_size: int = 30  # For StepLR
-    gamma: float = 0.1  # For StepLR
-
-
+# ── Training ───────────────────────────────────────────────────────────────
 @dataclass
 class TrainingConfig:
     max_epochs: int = 50
     learning_rate: float = 0.001
     weight_decay: float = 0.0001
-    optimizer: OptimizerConfig = field(default_factory=OptimizerConfig)
+
+
+# ── Optimizer (with nested scheduler) ─────────────────────────────────────
+@dataclass
+class SchedulerConfig:
+    _target_: str = "torch.optim.lr_scheduler.ReduceLROnPlateau"
+    type: Optional[str] = "ReduceLROnPlateau"
+    mode: str = "min"
+    factor: float = 0.5
+    patience: int = 5
+    T_max: int = 100
+    eta_min: float = 1e-6
+    step_size: int = 30
+    gamma: float = 0.1
+
+
+@dataclass
+class OptimizerConfig:
+    _target_: str = "torch.optim.AdamW"
+    type: str = "AdamW"
+    momentum: float = 0.9
+    nesterov: bool = True
     scheduler: SchedulerConfig = field(default_factory=SchedulerConfig)
 
 
+# ── Callbacks ──────────────────────────────────────────────────────────────
 @dataclass
-class ModelConfig:
-    name: str = "SimpleCNN"
-    dropout: float = 0.5
-    num_blocks: int = 4  # Number of conv blocks (depth)
-    base_channels: int = 32  # Starting channels (width)
-    channel_multiplier: float = 2.0  # Channel growth per block
-    hidden_dim: int = 128  # Classifier hidden dimension
+class CheckpointConfig:
+    _target_: str = "pytorch_lightning.callbacks.ModelCheckpoint"
+    dirpath: str = "checkpoints"
+    filename: str = "cnn-{epoch:02d}-{val_acc:.4f}"
+    monitor: str = "val/acc"
+    mode: str = "max"
+    save_top_k: int = 1
+    save_last: bool = True
 
 
+@dataclass
+class EarlyStoppingConfig:
+    _target_: str = "pytorch_lightning.callbacks.EarlyStopping"
+    enabled: bool = False
+    monitor: str = "val/loss"
+    patience: int = 10
+    mode: str = "min"
+
+
+@dataclass
+class CallbacksConfig:
+    checkpoint: CheckpointConfig = field(default_factory=CheckpointConfig)
+    early_stopping: EarlyStoppingConfig = field(default_factory=EarlyStoppingConfig)
+
+
+# ── Trainer (with nested logger) ──────────────────────────────────────────
+@dataclass
+class TensorBoardLoggerConfig:
+    _target_: str = "pytorch_lightning.loggers.TensorBoardLogger"
+    save_dir: str = "logs"
+    name: str = "image_classifier"
+
+
+@dataclass
+class MLflowLoggerConfig:
+    _target_: str = "pytorch_lightning.loggers.MLFlowLogger"
+    experiment_name: str = "image_classifier"
+    tracking_uri: str = "file:./mlruns"
+
+
+@dataclass
+class LoggerConfig:
+    tensorboard: TensorBoardLoggerConfig = field(default_factory=TensorBoardLoggerConfig)
+    mlflow: MLflowLoggerConfig = field(default_factory=MLflowLoggerConfig)
+
+
+@dataclass
+class TrainerConfig:
+    _target_: str = "pytorch_lightning.Trainer"
+    accelerator: str = "cuda"
+    devices: int = 1
+    precision: str = "16-mixed"
+    log_every_n_steps: int = 10
+    deterministic: bool = True
+    gradient_clip_val: float = 10000
+    logger: LoggerConfig = field(default_factory=LoggerConfig)
+
+
+# ── Top-level config ──────────────────────────────────────────────────────
 @dataclass
 class Config:
-    data: DataConfig
-    dataloader: DataLoaderConfig
-    training: TrainingConfig
-    model: ModelConfig
-    
-    @classmethod
-    def from_yaml(cls, config_path: str) -> "Config":
-        """Load configuration from YAML file."""
-        with open(config_path, "r") as f:
-            config_dict = yaml.safe_load(f)
-        
-        # Convert exclude_wells from list of lists to list of tuples
-        dataloader_config = config_dict.get("dataloader", {})
-        if dataloader_config.get("exclude_wells"):
-            dataloader_config["exclude_wells"] = [
-                tuple(w) for w in dataloader_config["exclude_wells"]
-            ]
-        
-        training_config = config_dict.get("training", {})
-        
-        # Parse optimizer config
-        optimizer_config_data = training_config.get("optimizer")
-        if optimizer_config_data is not None:
-            training_config["optimizer"] = OptimizerConfig(**optimizer_config_data)
-        else:
-            training_config["optimizer"] = OptimizerConfig()
-        
-        # Parse scheduler config
-        scheduler_config_data = training_config.get("scheduler")
-        if scheduler_config_data is not None:
-            training_config["scheduler"] = SchedulerConfig(**scheduler_config_data)
-        else:
-            training_config["scheduler"] = SchedulerConfig()
-        
-        return cls(
-            data=DataConfig(**config_dict.get("data", {})),
-            dataloader=DataLoaderConfig(**dataloader_config),
-            training=TrainingConfig(**training_config),
-            model=ModelConfig(**config_dict.get("model", {})),
-        )
-    
-    def save_yaml(self, config_path: str) -> None:
-        """Save configuration to YAML file."""
-        config_dict = {
-            "data": {
-                "root_dir": self.data.root_dir,
-                "channels": self.data.channels,
-                "crop_size": self.data.crop_size,
-            },
-            "dataloader": {
-                "batch_size": self.dataloader.batch_size,
-                "num_workers": self.dataloader.num_workers,
-                "pin_memory": self.dataloader.pin_memory,
-                "train_val_split": self.dataloader.train_val_split,
-                "use_mongodb": self.dataloader.use_mongodb,
-                "use_tiling": self.dataloader.use_tiling,
-                "tile_stride": self.dataloader.tile_stride,
-                "cache_size": self.dataloader.cache_size,
-            },
-            "training": {
-                "max_epochs": self.training.max_epochs,
-                "learning_rate": self.training.learning_rate,
-                "weight_decay": self.training.weight_decay,
-            },
-            "model": {
-                "name": self.model.name,
-                "dropout": self.model.dropout,
-            },
-        }
-        
-        Path(config_path).parent.mkdir(parents=True, exist_ok=True)
-        with open(config_path, "w") as f:
-            yaml.dump(config_dict, f, default_flow_style=False)
+    datamodule: DataModuleConfig = field(default_factory=DataModuleConfig)
+    model: ModelConfig = field(default_factory=ModelConfig)
+    training: TrainingConfig = field(default_factory=TrainingConfig)
+    optimizer: OptimizerConfig = field(default_factory=OptimizerConfig)
+    callbacks: CallbacksConfig = field(default_factory=CallbacksConfig)
+    trainer: TrainerConfig = field(default_factory=TrainerConfig)
+
+    # Runtime parameters
+    seed: int = 42
+    ckpt: Optional[str] = None
+    resume_from_model: Optional[str] = None
+    run_name: Optional[str] = None
+    tags: Optional[List[str]] = None

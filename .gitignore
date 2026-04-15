@@ -86,6 +86,7 @@ events.out.tfevents.*
 
 # Data (don't commit large data files)
 data/
+!configs/
 *.jxl
 *.tif
 *.tiff

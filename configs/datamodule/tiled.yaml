@@ -1,0 +1,22 @@
+_target_: src.datamodule.MultiChannelDataModule
+
+batch_size: 64
+num_workers: 0
+pin_memory: true
+use_mongodb: true
+train_val_split: 0.5
+max_wells_per_label: 2
+exclude_wells:
+  - ["MIG-Exp03-CP-40X-bin1X1", "K07"]
+  - ["MIG-Exp03-CP-40X-bin1X1", "K08"]
+  - ["MIG-Exp03-CP-40X-bin1X1", "K09"]
+
+dataset:
+  _target_: src.dataset.TiledMultiChannelDataset
+  root_dir: "O:\\BTSData\\MeasurementData\\MIG\\MIG-Exp03-CP-40X-bin1X1_20230831_143904\\MIG-Exp03-CP-40X-bin1X1"
+  channels: [1, 2, 3, 4, 5]
+  crop_size: 224
+  stride: null
+  cache_size: 32
+  max_samples_per_label: 4
+  verbose: true

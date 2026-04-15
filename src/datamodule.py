@@ -3,6 +3,7 @@ from typing import Dict, List, Optional, Tuple
 
 import torch
 import pytorch_lightning as pl
+from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader
 from sklearn.model_selection import train_test_split
 
@@ -14,67 +15,59 @@ class MultiChannelDataModule(pl.LightningDataModule):
     """DataModule for multi-channel microscopy images.
     
     Handles data loading, splitting, and transformations.
+    The dataset type is determined by the dataset_cfg._target_ field,
+    allowing easy switching between TiledMultiChannelDataset and
+    MultiChannelImageDataset via Hydra config.
     """
     
     def __init__(
         self,
-        root_dir: str,
-        channels: List[int],
-        crop_size: int = 224,
+        dataset_cfg: DictConfig,
         batch_size: int = 16,
         num_workers: int = 4,
         pin_memory: bool = True,
         train_val_split: float = 0.66,
         use_mongodb: bool = False,
-        use_tiling: bool = True,
-        tile_stride: Optional[int] = None,
-        cache_size: int = 16,
         max_wells_per_label: Optional[int] = None,
-        max_samples_per_label: Optional[int] = None,
-        verbose: bool = False,
         exclude_wells: Optional[List[Tuple[str, str]]] = None,
     ):
         """
         Args:
-            root_dir: Root directory containing images.
-            channels: List of channel numbers to use (1-5).
-            crop_size: Size for cropping/tiling.
+            dataset_cfg: Hydra config for the dataset (contains _target_ and dataset params).
             batch_size: Batch size for data loaders.
             num_workers: Number of workers for data loading.
             pin_memory: Whether to pin memory for faster GPU transfer.
             train_val_split: Fraction of data for training (rest for validation).
             use_mongodb: Whether to use MongoDB for labels.
-            use_tiling: If True, use grid tiling; if False, use random cropping.
-            tile_stride: Stride between tiles. If None, uses crop_size (non-overlapping).
-            cache_size: Number of images to keep in LRU cache (for tiling mode).
             max_wells_per_label: Max wells per label class (None = all).
-            max_samples_per_label: Max samples per label for balanced dataset (None = all).
-            verbose: Print detailed sample selection info.
             exclude_wells: List of (plate, well) tuples to exclude (corrupted images).
         """
         super().__init__()
-        self.save_hyperparameters()
+        self.save_hyperparameters(ignore=["dataset_cfg"])
         
-        self.root_dir = root_dir
-        self.channels = channels
-        self.crop_size = crop_size
+        self.dataset_cfg = dataset_cfg
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.pin_memory = pin_memory
         self.train_val_split = train_val_split
         self.use_mongodb = use_mongodb
-        self.use_tiling = use_tiling
-        self.tile_stride = tile_stride
-        self.cache_size = cache_size
         self.max_wells_per_label = max_wells_per_label
-        self.max_samples_per_label = max_samples_per_label
-        self.verbose = verbose
         self.exclude_wells = exclude_wells
+        
+        # Expose dataset-level params for external access
+        self.root_dir = dataset_cfg.root_dir
+        self.channels = list(dataset_cfg.channels)
+        self.crop_size = dataset_cfg.crop_size
         
         self.train_dataset = None
         self.val_dataset = None
         self.test_dataset = None
         self.label_encoder = None
+        
+    @property
+    def is_tiled(self) -> bool:
+        """Check if dataset is tiled based on _target_."""
+        return "TiledMultiChannelDataset" in self.dataset_cfg._target_
         
     def setup(self, stage: Optional[str] = None):
         """Setup datasets for training, validation, and testing."""
@@ -100,7 +93,7 @@ class MultiChannelDataModule(pl.LightningDataModule):
         print(f"Classes found: {self.label_encoder.classes}")
         print(f"Number of classes: {self.label_encoder.num_classes}")
         
-        if self.use_tiling:
+        if self.is_tiled:
             self._setup_tiled(labels_dict)
         else:
             self._setup_random_crop(labels_dict)
@@ -127,32 +120,35 @@ class MultiChannelDataModule(pl.LightningDataModule):
         train_labels = {w: labels_dict[w] for w in train_wells}
         val_labels = {w: labels_dict[w] for w in val_wells}
         
+        # Extract dataset params from config
+        ds = self.dataset_cfg
+        
         # Create train dataset with augmentation transforms
         self.train_dataset = TiledMultiChannelDataset(
-            root_dir=self.root_dir,
-            channels=self.channels,
+            root_dir=ds.root_dir,
+            channels=list(ds.channels),
             labels_dict=train_labels,
             label_encoder=self.label_encoder,
-            crop_size=self.crop_size,
-            stride=self.tile_stride,
+            crop_size=ds.crop_size,
+            stride=ds.stride,
             transform=get_tile_train_transforms(),
-            cache_size=self.cache_size,
-            max_samples_per_label=self.max_samples_per_label,
-            verbose=self.verbose,
+            cache_size=ds.cache_size,
+            max_samples_per_label=ds.max_samples_per_label,
+            verbose=ds.verbose,
         )
         
         # Create val dataset with minimal transforms
         self.val_dataset = TiledMultiChannelDataset(
-            root_dir=self.root_dir,
-            channels=self.channels,
+            root_dir=ds.root_dir,
+            channels=list(ds.channels),
             labels_dict=val_labels,
             label_encoder=self.label_encoder,
-            crop_size=self.crop_size,
-            stride=self.tile_stride,
+            crop_size=ds.crop_size,
+            stride=ds.stride,
             transform=get_tile_val_transforms(),
-            cache_size=self.cache_size,
-            max_samples_per_label=self.max_samples_per_label,
-            verbose=self.verbose,
+            cache_size=ds.cache_size,
+            max_samples_per_label=ds.max_samples_per_label,
+            verbose=ds.verbose,
         )
         
         print(f"Train: {self.train_dataset.num_samples} samples -> {len(self.train_dataset)} tiles")
@@ -179,25 +175,28 @@ class MultiChannelDataModule(pl.LightningDataModule):
         train_labels = {w: labels_dict[w] for w in train_wells}
         val_labels = {w: labels_dict[w] for w in val_wells}
         
+        # Extract dataset params from config
+        ds = self.dataset_cfg
+        
         self.train_dataset = MultiChannelImageDataset(
-            root_dir=self.root_dir,
-            channels=self.channels,
+            root_dir=ds.root_dir,
+            channels=list(ds.channels),
             labels_dict=train_labels,
             label_encoder=self.label_encoder,
             transform=get_train_transforms(
-                crop_size=self.crop_size,
-                num_channels=len(self.channels),
+                crop_size=ds.crop_size,
+                num_channels=len(ds.channels),
             ),
         )
         
         self.val_dataset = MultiChannelImageDataset(
-            root_dir=self.root_dir,
-            channels=self.channels,
+            root_dir=ds.root_dir,
+            channels=list(ds.channels),
             labels_dict=val_labels,
             label_encoder=self.label_encoder,
             transform=get_val_transforms(
-                crop_size=self.crop_size,
-                num_channels=len(self.channels),
+                crop_size=ds.crop_size,
+                num_channels=len(ds.channels),
             ),
         )
         
