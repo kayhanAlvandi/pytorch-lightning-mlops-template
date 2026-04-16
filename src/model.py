@@ -356,76 +356,35 @@ class CNNClassifier(pl.LightningModule):
         return {"test_loss": loss, "preds": preds, "labels": labels}
     
     def configure_optimizers(self):
-        # Create optimizer based on config
-        optimizer_config = self._optimizer_config
+        from hydra.utils import instantiate
+        from omegaconf import OmegaConf, DictConfig
         
-        if optimizer_config.type == "Adam":
-            optimizer = torch.optim.Adam(
-                self.parameters(),
-                lr=self.learning_rate,
-                weight_decay=self.weight_decay,
-            )
-        elif optimizer_config.type == "AdamW":
-            optimizer = torch.optim.AdamW(
-                self.parameters(),
-                lr=self.learning_rate,
-                weight_decay=self.weight_decay,
-            )
-        elif optimizer_config.type == "SGD":
-            optimizer = torch.optim.SGD(
-                self.parameters(),
-                lr=self.learning_rate,
-                weight_decay=self.weight_decay,
-                momentum=optimizer_config.momentum,
-                nesterov=optimizer_config.nesterov,
-            )
-        else:
-            raise ValueError(f"Unknown optimizer type: {optimizer_config.type}")
+        opt_cfg = OmegaConf.to_container(self._optimizer_config, resolve=True)
         
-        # Create scheduler based on config
-        scheduler_config = self._scheduler_config
+        # Separate scheduler config from optimizer config
+        scheduler_cfg_dict = opt_cfg.pop("scheduler", None)
         
-        if scheduler_config.type == "None" or scheduler_config.type is None:
+        # Map learning_rate -> lr (PyTorch convention)
+        lr = opt_cfg.pop("learning_rate", self.learning_rate)
+        
+        # Instantiate optimizer via _target_
+        optimizer = instantiate(DictConfig(opt_cfg), params=self.parameters(), lr=lr)
+        
+        # Instantiate scheduler if configured
+        if scheduler_cfg_dict is None or scheduler_cfg_dict.get("_target_") is None:
             return optimizer
-        elif scheduler_config.type == "ReduceLROnPlateau":
-            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-                optimizer,
-                mode=scheduler_config.mode,
-                factor=scheduler_config.factor,
-                patience=scheduler_config.patience
-            )
-            return {
-                "optimizer": optimizer,
-                "lr_scheduler": {
-                    "scheduler": scheduler,
-                    "monitor": "val/loss",
-                },
-            }
-        elif scheduler_config.type == "CosineAnnealingLR":
-            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-                optimizer,
-                T_max=scheduler_config.T_max,
-                eta_min=scheduler_config.eta_min
-            )
-            return {
-                "optimizer": optimizer,
-                "lr_scheduler": {
-                    "scheduler": scheduler,
-                    "interval": "epoch",
-                },
-            }
-        elif scheduler_config.type == "StepLR":
-            scheduler = torch.optim.lr_scheduler.StepLR(
-                optimizer,
-                step_size=scheduler_config.step_size,
-                gamma=scheduler_config.gamma
-            )
-            return {
-                "optimizer": optimizer,
-                "lr_scheduler": {
-                    "scheduler": scheduler,
-                    "interval": "epoch",
-                },
-            }
-        else:
-            raise ValueError(f"Unknown scheduler type: {scheduler_config.type}")
+        
+        scheduler = instantiate(DictConfig(scheduler_cfg_dict), optimizer=optimizer)
+        
+        # ReduceLROnPlateau needs a monitor key
+        lr_scheduler_config = {
+            "scheduler": scheduler,
+            "interval": "epoch",
+        }
+        if "ReduceLROnPlateau" in scheduler_cfg_dict["_target_"]:
+            lr_scheduler_config["monitor"] = "val/loss"
+        
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": lr_scheduler_config,
+        }

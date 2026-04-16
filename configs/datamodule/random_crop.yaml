@@ -16,3 +16,13 @@ dataset:
   root_dir: "O:\\BTSData\\MeasurementData\\MIG\\MIG-Exp03-CP-40X-bin1X1_20230831_143904\\MIG-Exp03-CP-40X-bin1X1"
   channels: [1, 2, 3, 4, 5]
   crop_size: 224
+
+train_transform:
+  _target_: src.transforms.get_train_transforms
+  crop_size: ${datamodule.dataset.crop_size}
+  num_channels: 5
+
+val_transform:
+  _target_: src.transforms.get_val_transforms
+  crop_size: ${datamodule.dataset.crop_size}
+  num_channels: 5

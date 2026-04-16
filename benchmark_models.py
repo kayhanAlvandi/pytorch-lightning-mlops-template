@@ -40,7 +40,7 @@ def run_training(model_config, experiment_name, tags):
     cmd = [
         "python", "train.py",
         f"model={model_config}",
-        f"training.max_epochs={MAX_EPOCHS}",
+        f"trainer.max_epochs={MAX_EPOCHS}",
         f"run_name={experiment_name}",
         f"tags=[{','.join(tags)}]",
     ]

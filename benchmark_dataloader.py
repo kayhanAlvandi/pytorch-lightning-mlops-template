@@ -17,19 +17,15 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 import torch
-from src.datamodule import MultiChannelDataModule
-from src.config import Config
+from hydra.utils import instantiate
+from omegaconf import OmegaConf, DictConfig
 
 
 def benchmark_config(
-    root_dir: str,
-    channels: list,
-    crop_size: int,
+    datamodule_cfg: DictConfig,
     num_workers: int,
     batch_size: int,
-    cache_size: int,
     pin_memory: bool,
-    use_tiling: bool = True,
     num_batches: int = 20,
     warmup_batches: int = 5,
     max_tiles: int = 2000,
@@ -40,16 +36,12 @@ def benchmark_config(
     Returns dict with throughput metrics.
     """
     try:
-        datamodule = MultiChannelDataModule(
-            root_dir=root_dir,
-            channels=channels,
-            crop_size=crop_size,
+        datamodule = instantiate(
+            datamodule_cfg,
             batch_size=batch_size,
             num_workers=num_workers,
             pin_memory=pin_memory,
-            use_mongodb=True,
-            use_tiling=use_tiling,
-            cache_size=cache_size,
+            _recursive_=False,
         )
         datamodule.setup()
         
@@ -91,6 +83,7 @@ def benchmark_config(
         
         throughput = sum(throughputs) / len(throughputs)
         
+        cache_size = OmegaConf.select(datamodule_cfg, "dataset.cache_size")
         return {
             "num_workers": num_workers,
             "batch_size": batch_size,
@@ -104,6 +97,7 @@ def benchmark_config(
         }
         
     except Exception as e:
+        cache_size = OmegaConf.select(datamodule_cfg, "dataset.cache_size")
         return {
             "num_workers": num_workers,
             "batch_size": batch_size,
@@ -114,17 +108,22 @@ def benchmark_config(
         }
 
 
-def run_benchmark(config_path: str = "config/config.yaml"):
+def run_benchmark():
     """Run full benchmark suite."""
-    config = Config.from_yaml(config_path)
+    from hydra import compose, initialize_config_dir
+    
+    config_dir = str(Path(__file__).parent / "configs")
+    with initialize_config_dir(config_dir=config_dir, version_base=None):
+        cfg = compose(config_name="config")
+    
+    datamodule_cfg = cfg.datamodule
     
     # Parameter grid to search
-    # With 5000 tiles (~50 images), test cache sizes that matter
     param_grid = {
         "num_workers": [0],
         "batch_size": [64],
-        "cache_size": [16, 32, 64, 128],  # 50 images needed, so these will show cache effect
         "pin_memory": [True],
+        "cache_size": [4, 8, 16, 32],
     }
     
     # Generate all combinations
@@ -133,9 +132,10 @@ def run_benchmark(config_path: str = "config/config.yaml"):
     
     print("=" * 70)
     print("DataLoader Benchmark")
-    print(f"Data root: {config.data.root_dir}")
-    print(f"Crop size: {config.data.crop_size}")
-    print(f"Channels: {config.data.channels}")
+    print(f"Data root: {datamodule_cfg.dataset.root_dir}")
+    print(f"Crop size: {datamodule_cfg.dataset.crop_size}")
+    print(f"Channels: {list(datamodule_cfg.dataset.channels)}")
+    print(f"Dataset: {datamodule_cfg.dataset._target_}")
     print(f"Testing {len(combinations)} configurations...")
     print("=" * 70)
     
@@ -145,10 +145,13 @@ def run_benchmark(config_path: str = "config/config.yaml"):
         params = dict(zip(keys, combo))
         print(f"\n[{i+1}/{len(combinations)}] Testing: {params}")
         
+        # Override nested dataset params (e.g. cache_size) via OmegaConf
+        cfg_override = OmegaConf.create(OmegaConf.to_container(datamodule_cfg, resolve=True))
+        if "cache_size" in params:
+            OmegaConf.update(cfg_override, "dataset.cache_size", params.pop("cache_size"))
+        
         result = benchmark_config(
-            root_dir=config.data.root_dir,
-            channels=config.data.channels,
-            crop_size=config.data.crop_size,
+            datamodule_cfg=cfg_override,
             **params,
         )
         results.append(result)
@@ -169,7 +172,8 @@ def run_benchmark(config_path: str = "config/config.yaml"):
     print("-" * 70)
     
     for r in successful[:10]:  # Top 10
-        print(f"{r['num_workers']:<8} {r['batch_size']:<8} {r['cache_size']:<8} "
+        print(f"{r['num_workers']:<8} {r['batch_size']:<8} "
+              f"{r.get('cache_size', '-'):<8} "
               f"{str(r['pin_memory']):<8} {r['samples_per_sec']:<12}")
     
     if successful:
@@ -178,7 +182,7 @@ def run_benchmark(config_path: str = "config/config.yaml"):
         print("BEST CONFIGURATION:")
         print(f"  num_workers: {best['num_workers']}")
         print(f"  batch_size: {best['batch_size']}")
-        print(f"  cache_size: {best['cache_size']}")
+        print(f"  cache_size: {best.get('cache_size', '-')}")
         print(f"  pin_memory: {best['pin_memory']}")
         print(f"  throughput: {best['samples_per_sec']} samples/sec")
         print("=" * 70)

@@ -1,73 +1,82 @@
 """PyTorch Lightning DataModule for multi-channel images."""
 from typing import Dict, List, Optional, Tuple
 
-import torch
 import pytorch_lightning as pl
-from omegaconf import DictConfig, OmegaConf
+from hydra.utils import instantiate
+from omegaconf import DictConfig
 from torch.utils.data import DataLoader
 from sklearn.model_selection import train_test_split
 
-from .dataset import MultiChannelImageDataset, TiledMultiChannelDataset, DummyLabelsProvider, MongoDBLabelsProvider, LabelEncoder
-from .transforms import get_train_transforms, get_val_transforms, get_tile_train_transforms, get_tile_val_transforms
+from .dataset import DummyLabelsProvider, MongoDBLabelsProvider, LabelEncoder
 
 
 class MultiChannelDataModule(pl.LightningDataModule):
     """DataModule for multi-channel microscopy images.
     
     Handles data loading, splitting, and transformations.
-    The dataset type is determined by the dataset_cfg._target_ field,
-    allowing easy switching between TiledMultiChannelDataset and
-    MultiChannelImageDataset via Hydra config.
+    All components (dataset class, train/val transforms) are determined
+    by Hydra config _target_ fields and created via hydra.utils.instantiate().
+    
+    Constructor params match the YAML keys exactly so that
+    ``instantiate(cfg.datamodule, _recursive_=False)`` works directly.
     """
     
     def __init__(
         self,
-        dataset_cfg: DictConfig,
+        dataset: DictConfig,
+        train_transform: DictConfig,
+        val_transform: DictConfig,
         batch_size: int = 16,
         num_workers: int = 4,
         pin_memory: bool = True,
         train_val_split: float = 0.66,
         use_mongodb: bool = False,
         max_wells_per_label: Optional[int] = None,
-        exclude_wells: Optional[List[Tuple[str, str]]] = None,
+        exclude_wells: Optional[List] = None,
     ):
         """
         Args:
-            dataset_cfg: Hydra config for the dataset (contains _target_ and dataset params).
+            dataset: Hydra config for the dataset (contains _target_ and dataset params).
+            train_transform: Hydra config for training transforms (contains _target_).
+            val_transform: Hydra config for validation transforms (contains _target_).
             batch_size: Batch size for data loaders.
             num_workers: Number of workers for data loading.
             pin_memory: Whether to pin memory for faster GPU transfer.
             train_val_split: Fraction of data for training (rest for validation).
             use_mongodb: Whether to use MongoDB for labels.
             max_wells_per_label: Max wells per label class (None = all).
-            exclude_wells: List of (plate, well) tuples to exclude (corrupted images).
+            exclude_wells: List of [plate, well] pairs to exclude (corrupted images).
         """
         super().__init__()
-        self.save_hyperparameters(ignore=["dataset_cfg"])
+        self.save_hyperparameters(ignore=["dataset", "train_transform", "val_transform"])
         
-        self.dataset_cfg = dataset_cfg
+        self.dataset_cfg = dataset
+        self.train_transform_cfg = train_transform
+        self.val_transform_cfg = val_transform
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.pin_memory = pin_memory
         self.train_val_split = train_val_split
         self.use_mongodb = use_mongodb
         self.max_wells_per_label = max_wells_per_label
-        self.exclude_wells = exclude_wells
+        
+        # Convert exclude_wells from list of lists to list of tuples internally
+        if exclude_wells is not None:
+            from omegaconf import OmegaConf
+            raw = OmegaConf.to_container(exclude_wells) if hasattr(exclude_wells, '_metadata') else exclude_wells
+            self.exclude_wells = [tuple(w) for w in raw]
+        else:
+            self.exclude_wells = None
         
         # Expose dataset-level params for external access
-        self.root_dir = dataset_cfg.root_dir
-        self.channels = list(dataset_cfg.channels)
-        self.crop_size = dataset_cfg.crop_size
+        self.root_dir = dataset.root_dir
+        self.channels = list(dataset.channels)
+        self.crop_size = dataset.crop_size
         
         self.train_dataset = None
         self.val_dataset = None
         self.test_dataset = None
         self.label_encoder = None
-        
-    @property
-    def is_tiled(self) -> bool:
-        """Check if dataset is tiled based on _target_."""
-        return "TiledMultiChannelDataset" in self.dataset_cfg._target_
         
     def setup(self, stage: Optional[str] = None):
         """Setup datasets for training, validation, and testing."""
@@ -93,69 +102,14 @@ class MultiChannelDataModule(pl.LightningDataModule):
         print(f"Classes found: {self.label_encoder.classes}")
         print(f"Number of classes: {self.label_encoder.num_classes}")
         
-        if self.is_tiled:
-            self._setup_tiled(labels_dict)
-        else:
-            self._setup_random_crop(labels_dict)
+        self._setup_datasets(labels_dict)
     
-    def _setup_tiled(self, labels_dict: Dict):
-        """Setup using TiledMultiChannelDataset with grid tiling."""
-        # Split at (plate, well) level to avoid data leakage
-        # Stratified by label to ensure balanced representation
-        unique_wells = list(labels_dict.keys())  # List of (plate, well) tuples
-        labels = [labels_dict[w] for w in unique_wells]
+    def _setup_datasets(self, labels_dict: Dict):
+        """Setup train/val datasets using hydra.utils.instantiate().
         
-        if len(unique_wells) < 2:
-            raise ValueError(f"Not enough wells to split: {len(unique_wells)} wells")
-        
-        # Stratified split by label
-        train_wells, val_wells = train_test_split(
-            unique_wells,
-            train_size=self.train_val_split,
-            stratify=labels,
-            random_state=42,
-        )
-        
-        # Create separate labels dicts for train/val
-        train_labels = {w: labels_dict[w] for w in train_wells}
-        val_labels = {w: labels_dict[w] for w in val_wells}
-        
-        # Extract dataset params from config
-        ds = self.dataset_cfg
-        
-        # Create train dataset with augmentation transforms
-        self.train_dataset = TiledMultiChannelDataset(
-            root_dir=ds.root_dir,
-            channels=list(ds.channels),
-            labels_dict=train_labels,
-            label_encoder=self.label_encoder,
-            crop_size=ds.crop_size,
-            stride=ds.stride,
-            transform=get_tile_train_transforms(),
-            cache_size=ds.cache_size,
-            max_samples_per_label=ds.max_samples_per_label,
-            verbose=ds.verbose,
-        )
-        
-        # Create val dataset with minimal transforms
-        self.val_dataset = TiledMultiChannelDataset(
-            root_dir=ds.root_dir,
-            channels=list(ds.channels),
-            labels_dict=val_labels,
-            label_encoder=self.label_encoder,
-            crop_size=ds.crop_size,
-            stride=ds.stride,
-            transform=get_tile_val_transforms(),
-            cache_size=ds.cache_size,
-            max_samples_per_label=ds.max_samples_per_label,
-            verbose=ds.verbose,
-        )
-        
-        print(f"Train: {self.train_dataset.num_samples} samples -> {len(self.train_dataset)} tiles")
-        print(f"Val: {self.val_dataset.num_samples} samples -> {len(self.val_dataset)} tiles")
-    
-    def _setup_random_crop(self, labels_dict: Dict):
-        """Setup using MultiChannelImageDataset with random cropping."""
+        The dataset class and transforms are fully determined by config _target_ fields.
+        No hardcoded class names — adding a new dataset type only requires a new YAML.
+        """
         # Split at (plate, well) level to avoid data leakage
         # Stratified by label to ensure balanced representation
         unique_wells = list(labels_dict.keys())
@@ -175,29 +129,25 @@ class MultiChannelDataModule(pl.LightningDataModule):
         train_labels = {w: labels_dict[w] for w in train_wells}
         val_labels = {w: labels_dict[w] for w in val_wells}
         
-        # Extract dataset params from config
-        ds = self.dataset_cfg
+        # Instantiate transforms from config _target_
+        train_transform = instantiate(self.train_transform_cfg)
+        val_transform = instantiate(self.val_transform_cfg)
         
-        self.train_dataset = MultiChannelImageDataset(
-            root_dir=ds.root_dir,
-            channels=list(ds.channels),
+        # Instantiate datasets from config _target_
+        # hydra.utils.instantiate reads _target_ to resolve the class,
+        # passes all other config keys as kwargs, and we add runtime args on top
+        self.train_dataset = instantiate(
+            self.dataset_cfg,
             labels_dict=train_labels,
             label_encoder=self.label_encoder,
-            transform=get_train_transforms(
-                crop_size=ds.crop_size,
-                num_channels=len(ds.channels),
-            ),
+            transform=train_transform,
         )
         
-        self.val_dataset = MultiChannelImageDataset(
-            root_dir=ds.root_dir,
-            channels=list(ds.channels),
+        self.val_dataset = instantiate(
+            self.dataset_cfg,
             labels_dict=val_labels,
             label_encoder=self.label_encoder,
-            transform=get_val_transforms(
-                crop_size=ds.crop_size,
-                num_channels=len(ds.channels),
-            ),
+            transform=val_transform,
         )
         
         print(f"Train: {len(train_labels)} wells -> {len(self.train_dataset)} samples")
@@ -233,7 +183,7 @@ class MultiChannelDataModule(pl.LightningDataModule):
         print(f"Limited to {n_per_label} wells per label: {total_before} -> {total_after} wells")
         
         # Print selected wells per label if verbose
-        if self.verbose:
+        if getattr(self.dataset_cfg, 'verbose', False):
             for label in sorted(wells_by_label.keys()):
                 wells_sorted = sorted(wells_by_label[label])
                 selected = wells_sorted[:n_per_label]

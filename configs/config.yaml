@@ -2,7 +2,6 @@
 defaults:
   - datamodule: tiled
   - model: simplecnn
-  - training: default
   - optimizer: adamw
   - callbacks: default
   - trainer: default

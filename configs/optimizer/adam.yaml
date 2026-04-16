@@ -1,15 +1,9 @@
 _target_: torch.optim.Adam
-type: Adam
-momentum: 0.9
-nesterov: true
+learning_rate: 0.001
+weight_decay: 0.0001
 
 scheduler:
   _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
-  type: ReduceLROnPlateau
   mode: min
   factor: 0.5
   patience: 5
-  T_max: 100
-  eta_min: 1e-6
-  step_size: 30
-  gamma: 0.1

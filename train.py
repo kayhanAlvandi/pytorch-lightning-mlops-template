@@ -7,18 +7,9 @@ import mlflow
 import pandas as pd
 import torch
 import pytorch_lightning as pl
+from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
-from pytorch_lightning.callbacks import (
-    ModelCheckpoint,
-    EarlyStopping,
-    LearningRateMonitor,
-    RichProgressBar,
-)
-from pytorch_lightning.loggers import TensorBoardLogger, MLFlowLogger
 
-from src.callbacks import LogBestModelToMLflow
-from src.datamodule import MultiChannelDataModule
-from src.model import CNNClassifier
 from src.dataset_versioning import (
     create_dataset_metadata,
     create_dataset_manifest,
@@ -26,6 +17,20 @@ from src.dataset_versioning import (
     get_git_commit_for_model_files,
     check_model_uncommitted_changes,
 )
+
+
+def _flatten_dict(d: dict, parent_key: str = "", sep: str = ".") -> dict:
+    """Flatten a nested dict into dot-separated keys for MLflow logging."""
+    items = []
+    for k, v in d.items():
+        new_key = f"{parent_key}{sep}{k}" if parent_key else k
+        if isinstance(v, dict):
+            items.extend(_flatten_dict(v, new_key, sep).items())
+        elif isinstance(v, (list, tuple)):
+            items.append((new_key, str(v)))
+        else:
+            items.append((new_key, v))
+    return dict(items)
 
 
 def get_checkpoint_from_mlflow_model(model_ref: str, tracking_uri: str = "file:./mlruns") -> str:
@@ -93,24 +98,10 @@ def main(cfg: DictConfig):
     pl.seed_everything(cfg.seed)
     torch.set_float32_matmul_precision('medium')  # Enable Tensor Cores
     
-    # Convert exclude_wells from list of lists to list of tuples
-    exclude_wells = None
-    if cfg.datamodule.exclude_wells is not None:
-        exclude_wells = [
-            tuple(w) for w in OmegaConf.to_container(cfg.datamodule.exclude_wells)
-        ]
-    
-    # Create data module
-    datamodule = MultiChannelDataModule(
-        dataset_cfg=cfg.datamodule.dataset,
-        batch_size=cfg.datamodule.batch_size,
-        num_workers=cfg.datamodule.num_workers,
-        pin_memory=cfg.datamodule.pin_memory,
-        train_val_split=cfg.datamodule.train_val_split,
-        use_mongodb=cfg.datamodule.use_mongodb,
-        max_wells_per_label=cfg.datamodule.max_wells_per_label,
-        exclude_wells=exclude_wells,
-    )
+    # Create data module via Hydra instantiate
+    # _recursive_=False prevents Hydra from instantiating nested dataset/transform configs
+    # (the datamodule does that itself in setup())
+    datamodule = instantiate(cfg.datamodule, _recursive_=False)
     
     # Setup data module to get label encoder with num_classes
     datamodule.setup()
@@ -126,26 +117,13 @@ def main(cfg: DictConfig):
     print(f"  Total samples: {train_samples + val_samples}")
     print(f"  Number of classes: {num_classes}")
 
-    # Prepare example input for MLflow logging callback (single sample from val loader)
-    val_loader = datamodule.val_dataloader()
-    try:
-        example_batch = next(iter(val_loader))
-    except StopIteration:
-        raise RuntimeError("Validation dataloader returned no batches; cannot build example input.")
-    example_input, _ = example_batch
-    example_input = example_input[:1].detach().cpu()
-    
-    # Create model
-    model = CNNClassifier(
+    # Create model via Hydra instantiate — _target_ resolves the class
+    model = instantiate(
+        cfg.model,
         in_channels=len(cfg.datamodule.dataset.channels),
         num_classes=num_classes,
-        learning_rate=cfg.training.learning_rate,
-        weight_decay=cfg.training.weight_decay,
-        dropout=cfg.model.dropout,
-        num_blocks=cfg.model.num_blocks,
-        base_channels=cfg.model.base_channels,
-        channel_multiplier=cfg.model.channel_multiplier,
-        hidden_dim=cfg.model.hidden_dim,
+        learning_rate=cfg.optimizer.learning_rate,
+        weight_decay=cfg.optimizer.weight_decay,
         class_names=datamodule.label_encoder.classes,
     )
     
@@ -153,41 +131,19 @@ def main(cfg: DictConfig):
     model._optimizer_config = cfg.optimizer
     model._scheduler_config = cfg.optimizer.scheduler
     
-    # Setup callbacks
-    checkpoint_callback = ModelCheckpoint(
-        dirpath=cfg.callbacks.checkpoint.dirpath,
-        filename=cfg.callbacks.checkpoint.filename,
-        monitor=cfg.callbacks.checkpoint.monitor,
-        mode=cfg.callbacks.checkpoint.mode,
-        save_top_k=cfg.callbacks.checkpoint.save_top_k,
-        save_last=cfg.callbacks.checkpoint.save_last,
-    )
-    callbacks = [
-        checkpoint_callback,
-        LearningRateMonitor(logging_interval="epoch"),
-        RichProgressBar(),
-    ]
-    
-    # Add early stopping if enabled
-    if cfg.callbacks.early_stopping.enabled:
-        callbacks.append(EarlyStopping(
-            monitor=cfg.callbacks.early_stopping.monitor,
-            patience=cfg.callbacks.early_stopping.patience,
-            mode=cfg.callbacks.early_stopping.mode,
-        ))
+    # Setup callbacks — instantiate every entry in the callbacks list from config
+    callbacks = [instantiate(cb_cfg) for cb_cfg in cfg.callbacks]
     
     # Setup dual logging: TensorBoard for visualization + MLflow for tracking
     tb_version = cfg.run_name if cfg.run_name else None
     
-    tb_logger = TensorBoardLogger(
-        save_dir=cfg.trainer.logger.tensorboard.save_dir,
-        name=cfg.trainer.logger.tensorboard.name,
+    tb_logger = instantiate(
+        cfg.trainer.logger.tensorboard,
         version=tb_version,
     )
     
-    mlflow_logger = MLFlowLogger(
-        experiment_name=cfg.trainer.logger.mlflow.experiment_name,
-        tracking_uri=cfg.trainer.logger.mlflow.tracking_uri,
+    mlflow_logger = instantiate(
+        cfg.trainer.logger.mlflow,
         log_model=False,
         run_name=cfg.run_name,
     )
@@ -200,39 +156,9 @@ def main(cfg: DictConfig):
     if check_model_uncommitted_changes():
         print("⚠ Warning: model.py has uncommitted changes - reproducibility not guaranteed!")
     
-    # Log all config parameters to MLflow (flatten the Hydra config)
-    flat_cfg = {
-        "datamodule.dataset._target_": cfg.datamodule.dataset._target_,
-        "datamodule.dataset.root_dir": cfg.datamodule.dataset.root_dir,
-        "datamodule.dataset.channels": str(list(cfg.datamodule.dataset.channels)),
-        "datamodule.dataset.crop_size": cfg.datamodule.dataset.crop_size,
-        "datamodule.batch_size": cfg.datamodule.batch_size,
-        "datamodule.num_workers": cfg.datamodule.num_workers,
-        "datamodule.train_val_split": cfg.datamodule.train_val_split,
-        "datamodule.max_wells_per_label": cfg.datamodule.max_wells_per_label,
-        "training.max_epochs": cfg.training.max_epochs,
-        "training.learning_rate": cfg.training.learning_rate,
-        "training.weight_decay": cfg.training.weight_decay,
-        "model.name": cfg.model.name,
-        "model.dropout": cfg.model.dropout,
-        "model.num_blocks": cfg.model.num_blocks,
-        "model.base_channels": cfg.model.base_channels,
-        "model.channel_multiplier": cfg.model.channel_multiplier,
-        "model.hidden_dim": cfg.model.hidden_dim,
-        "model.code_commit": model_code_commit or "unknown",
-        "seed": cfg.seed,
-        "optimizer.type": cfg.optimizer.type,
-        "optimizer.momentum": cfg.optimizer.momentum,
-        "optimizer.nesterov": cfg.optimizer.nesterov,
-        "optimizer.scheduler.type": cfg.optimizer.scheduler.type,
-        "optimizer.scheduler.mode": cfg.optimizer.scheduler.mode,
-        "optimizer.scheduler.factor": cfg.optimizer.scheduler.factor,
-        "optimizer.scheduler.patience": cfg.optimizer.scheduler.patience,
-        "optimizer.scheduler.T_max": cfg.optimizer.scheduler.T_max,
-        "optimizer.scheduler.eta_min": cfg.optimizer.scheduler.eta_min,
-        "optimizer.scheduler.step_size": cfg.optimizer.scheduler.step_size,
-        "optimizer.scheduler.gamma": cfg.optimizer.scheduler.gamma,
-    }
+    # Log all config parameters to MLflow (auto-flatten the entire Hydra config)
+    flat_cfg = _flatten_dict(OmegaConf.to_container(cfg, resolve=True))
+    flat_cfg["model.code_commit"] = model_code_commit or "unknown"
     mlflow_logger.log_hyperparams(flat_cfg)
     
     # Log full Hydra config as artifact
@@ -309,28 +235,16 @@ def main(cfg: DictConfig):
         import traceback
         traceback.print_exc()
     
-    log_best_callback = LogBestModelToMLflow(
-        checkpoint_callback=checkpoint_callback,
-        example_input=example_input,
-        mlflow_logger=mlflow_logger,
-        registered_model_name=cfg.model.name,
-        artifact_path="best_model",
-    )
-    callbacks.append(log_best_callback)
-
     loggers = [tb_logger, mlflow_logger]
     
-    # Create trainer
-    trainer = pl.Trainer(
-        max_epochs=cfg.training.max_epochs,
+    # Create trainer via Hydra instantiate
+    # Exclude nested logger config (already instantiated separately)
+    trainer_cfg = {k: v for k, v in OmegaConf.to_container(cfg.trainer, resolve=True).items()
+                   if k != "logger"}
+    trainer = instantiate(
+        DictConfig(trainer_cfg),
         callbacks=callbacks,
         logger=loggers,
-        accelerator=cfg.trainer.accelerator,
-        devices=cfg.trainer.devices,
-        precision=cfg.trainer.precision,
-        log_every_n_steps=cfg.trainer.log_every_n_steps,
-        deterministic=cfg.trainer.deterministic,
-        gradient_clip_val=cfg.trainer.gradient_clip_val,
     )
     
     # Resolve checkpoint path (local file or MLflow registered model)

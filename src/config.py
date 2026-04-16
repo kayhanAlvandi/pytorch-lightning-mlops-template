@@ -26,11 +26,38 @@ class RandomCropDatasetConfig:
     crop_size: int = 224
 
 
-# ── Datamodule (dataloader-level config + nested dataset) ─────────────────
+# ── Transform configs (nested inside datamodule) ─────────────────────────
+@dataclass
+class TileTrainTransformConfig:
+    _target_: str = "src.transforms.get_tile_train_transforms"
+
+
+@dataclass
+class TileValTransformConfig:
+    _target_: str = "src.transforms.get_tile_val_transforms"
+
+
+@dataclass
+class CropTrainTransformConfig:
+    _target_: str = "src.transforms.get_train_transforms"
+    crop_size: int = 224
+    num_channels: int = 5
+
+
+@dataclass
+class CropValTransformConfig:
+    _target_: str = "src.transforms.get_val_transforms"
+    crop_size: int = 224
+    num_channels: int = 5
+
+
+# ── Datamodule (dataloader-level config + nested dataset + transforms) ────
 @dataclass
 class DataModuleConfig:
     _target_: str = "src.datamodule.MultiChannelDataModule"
     dataset: Any = field(default_factory=TiledDatasetConfig)
+    train_transform: Any = field(default_factory=TileTrainTransformConfig)
+    val_transform: Any = field(default_factory=TileValTransformConfig)
     batch_size: int = 16
     num_workers: int = 4
     pin_memory: bool = True
@@ -44,7 +71,6 @@ class DataModuleConfig:
 @dataclass
 class ModelConfig:
     _target_: str = "src.model.CNNClassifier"
-    name: str = "SimpleCNN"
     dropout: float = 0.5
     num_blocks: int = 4
     base_channels: int = 32
@@ -52,62 +78,26 @@ class ModelConfig:
     hidden_dim: int = 128
 
 
-# ── Training ───────────────────────────────────────────────────────────────
-@dataclass
-class TrainingConfig:
-    max_epochs: int = 50
-    learning_rate: float = 0.001
-    weight_decay: float = 0.0001
-
-
 # ── Optimizer (with nested scheduler) ─────────────────────────────────────
 @dataclass
 class SchedulerConfig:
     _target_: str = "torch.optim.lr_scheduler.ReduceLROnPlateau"
-    type: Optional[str] = "ReduceLROnPlateau"
     mode: str = "min"
     factor: float = 0.5
     patience: int = 5
-    T_max: int = 100
-    eta_min: float = 1e-6
-    step_size: int = 30
-    gamma: float = 0.1
 
 
 @dataclass
 class OptimizerConfig:
     _target_: str = "torch.optim.AdamW"
-    type: str = "AdamW"
-    momentum: float = 0.9
-    nesterov: bool = True
+    learning_rate: float = 0.001
+    weight_decay: float = 0.0001
     scheduler: SchedulerConfig = field(default_factory=SchedulerConfig)
 
 
-# ── Callbacks ──────────────────────────────────────────────────────────────
-@dataclass
-class CheckpointConfig:
-    _target_: str = "pytorch_lightning.callbacks.ModelCheckpoint"
-    dirpath: str = "checkpoints"
-    filename: str = "cnn-{epoch:02d}-{val_acc:.4f}"
-    monitor: str = "val/acc"
-    mode: str = "max"
-    save_top_k: int = 1
-    save_last: bool = True
-
-
-@dataclass
-class EarlyStoppingConfig:
-    _target_: str = "pytorch_lightning.callbacks.EarlyStopping"
-    enabled: bool = False
-    monitor: str = "val/loss"
-    patience: int = 10
-    mode: str = "min"
-
-
-@dataclass
-class CallbacksConfig:
-    checkpoint: CheckpointConfig = field(default_factory=CheckpointConfig)
-    early_stopping: EarlyStoppingConfig = field(default_factory=EarlyStoppingConfig)
+# ── Callbacks (list of _target_ dicts, instantiated generically) ──────────
+# No structured config needed — callbacks is a plain list in YAML.
+# Each entry has a _target_ and its constructor args.
 
 
 # ── Trainer (with nested logger) ──────────────────────────────────────────
@@ -134,6 +124,7 @@ class LoggerConfig:
 @dataclass
 class TrainerConfig:
     _target_: str = "pytorch_lightning.Trainer"
+    max_epochs: int = 50
     accelerator: str = "cuda"
     devices: int = 1
     precision: str = "16-mixed"
@@ -148,9 +139,8 @@ class TrainerConfig:
 class Config:
     datamodule: DataModuleConfig = field(default_factory=DataModuleConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
-    training: TrainingConfig = field(default_factory=TrainingConfig)
     optimizer: OptimizerConfig = field(default_factory=OptimizerConfig)
-    callbacks: CallbacksConfig = field(default_factory=CallbacksConfig)
+    callbacks: List[Any] = field(default_factory=list)
     trainer: TrainerConfig = field(default_factory=TrainerConfig)
 
     # Runtime parameters

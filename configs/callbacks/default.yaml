@@ -1,5 +1,4 @@
-checkpoint:
-  _target_: pytorch_lightning.callbacks.ModelCheckpoint
+- _target_: pytorch_lightning.callbacks.ModelCheckpoint
   dirpath: checkpoints
   filename: "cnn-{epoch:02d}-{val_acc:.4f}"
   monitor: "val/acc"
@@ -7,9 +6,16 @@ checkpoint:
   save_top_k: 1
   save_last: true
 
-early_stopping:
-  _target_: pytorch_lightning.callbacks.EarlyStopping
-  enabled: false
-  monitor: "val/loss"
-  patience: 10
-  mode: min
+- _target_: pytorch_lightning.callbacks.LearningRateMonitor
+  logging_interval: epoch
+
+- _target_: pytorch_lightning.callbacks.RichProgressBar
+
+- _target_: src.callbacks.LogBestModelToMLflow
+  artifact_path: best_model
+
+# Uncomment to enable early stopping:
+# - _target_: pytorch_lightning.callbacks.EarlyStopping
+#   monitor: "val/loss"
+#   patience: 10
+#   mode: min

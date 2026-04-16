@@ -1,5 +1,4 @@
 _target_: src.model.CNNClassifier
-name: SimpleCNN
 dropout: 0.5
 num_blocks: 5
 base_channels: 32
