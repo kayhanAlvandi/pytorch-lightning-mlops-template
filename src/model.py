@@ -327,8 +327,8 @@ class CNNClassifier(pl.LightningModule):
             # Normalize to [0, 1]
             img_rgb = (img_rgb - img_rgb.min()) / (img_rgb.max() - img_rgb.min() + 1e-8)
             
-            pred_label = self.class_names[preds[i]]
-            true_label = self.class_names[labels[i]]
+            pred_label = self.class_names[preds[i].item()]
+            true_label = self.class_names[labels[i].item()]
             correct = preds[i] == labels[i]
             
             axes[i].imshow(img_rgb)

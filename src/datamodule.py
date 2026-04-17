@@ -2,8 +2,8 @@
 from typing import Dict, List, Optional, Tuple
 
 import pytorch_lightning as pl
-from hydra.utils import instantiate
-from omegaconf import DictConfig
+from hydra.utils import get_class, instantiate
+from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader
 from sklearn.model_selection import train_test_split
 
@@ -133,18 +133,22 @@ class MultiChannelDataModule(pl.LightningDataModule):
         train_transform = instantiate(self.train_transform_cfg)
         val_transform = instantiate(self.val_transform_cfg)
         
-        # Instantiate datasets from config _target_
-        # hydra.utils.instantiate reads _target_ to resolve the class,
-        # passes all other config keys as kwargs, and we add runtime args on top
-        self.train_dataset = instantiate(
-            self.dataset_cfg,
+        # Instantiate datasets: use get_class() + direct constructor call because
+        # labels_dict has tuple keys and label_encoder is a runtime object,
+        # neither of which can pass through OmegaConf.merge inside instantiate().
+        dataset_class = get_class(self.dataset_cfg._target_)
+        dataset_kwargs = OmegaConf.to_container(self.dataset_cfg, resolve=True)
+        dataset_kwargs.pop("_target_")
+        
+        self.train_dataset = dataset_class(
+            **dataset_kwargs,
             labels_dict=train_labels,
             label_encoder=self.label_encoder,
             transform=train_transform,
         )
         
-        self.val_dataset = instantiate(
-            self.dataset_cfg,
+        self.val_dataset = dataset_class(
+            **dataset_kwargs,
             labels_dict=val_labels,
             label_encoder=self.label_encoder,
             transform=val_transform,

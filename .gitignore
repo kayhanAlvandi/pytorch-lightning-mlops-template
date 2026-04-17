@@ -79,6 +79,7 @@ checkpoints/
 *.ckpt
 *.pth
 *.pt
+train.log
 
 # TensorBoard
 runs/

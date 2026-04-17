@@ -125,6 +125,7 @@ def main(cfg: DictConfig):
         learning_rate=cfg.optimizer.learning_rate,
         weight_decay=cfg.optimizer.weight_decay,
         class_names=datamodule.label_encoder.classes,
+        _convert_="all",
     )
     
     # Store optimizer and scheduler config in model for configure_optimizers
