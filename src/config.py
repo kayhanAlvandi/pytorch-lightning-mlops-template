@@ -78,7 +78,14 @@ class ModelConfig:
     hidden_dim: int = 128
 
 
-# ── Optimizer (with nested scheduler) ─────────────────────────────────────
+# ── Optimizer and Scheduler (sibling keys) ────────────────────────────────
+@dataclass
+class OptimizerInnerConfig:
+    _target_: str = "torch.optim.AdamW"
+    lr: float = 0.001
+    weight_decay: float = 0.0001
+
+
 @dataclass
 class SchedulerConfig:
     _target_: str = "torch.optim.lr_scheduler.ReduceLROnPlateau"
@@ -89,9 +96,7 @@ class SchedulerConfig:
 
 @dataclass
 class OptimizerConfig:
-    _target_: str = "torch.optim.AdamW"
-    learning_rate: float = 0.001
-    weight_decay: float = 0.0001
+    optimizer: OptimizerInnerConfig = field(default_factory=OptimizerInnerConfig)
     scheduler: SchedulerConfig = field(default_factory=SchedulerConfig)
 
 

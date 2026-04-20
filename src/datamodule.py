@@ -48,6 +48,14 @@ class MultiChannelDataModule(pl.LightningDataModule):
             exclude_wells: List of [plate, well] pairs to exclude (corrupted images).
         """
         super().__init__()
+        
+        # Convert exclude_wells to plain Python types BEFORE save_hyperparameters
+        # to prevent OmegaConf ListConfig from leaking into checkpoints
+        if exclude_wells is not None:
+            from omegaconf import OmegaConf
+            raw = OmegaConf.to_container(exclude_wells) if hasattr(exclude_wells, '_metadata') else exclude_wells
+            exclude_wells = [tuple(w) for w in raw]
+        
         self.save_hyperparameters(ignore=["dataset", "train_transform", "val_transform"])
         
         self.dataset_cfg = dataset
@@ -59,14 +67,7 @@ class MultiChannelDataModule(pl.LightningDataModule):
         self.train_val_split = train_val_split
         self.use_mongodb = use_mongodb
         self.max_wells_per_label = max_wells_per_label
-        
-        # Convert exclude_wells from list of lists to list of tuples internally
-        if exclude_wells is not None:
-            from omegaconf import OmegaConf
-            raw = OmegaConf.to_container(exclude_wells) if hasattr(exclude_wells, '_metadata') else exclude_wells
-            self.exclude_wells = [tuple(w) for w in raw]
-        else:
-            self.exclude_wells = None
+        self.exclude_wells = exclude_wells
         
         # Expose dataset-level params for external access
         self.root_dir = dataset.root_dir

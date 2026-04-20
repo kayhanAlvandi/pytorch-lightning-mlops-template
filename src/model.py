@@ -92,8 +92,8 @@ class CNNClassifier(pl.LightningModule):
         self,
         in_channels: int,
         num_classes: int,
-        learning_rate: float = 0.001,
-        weight_decay: float = 0.0001,
+        optimizer_config: dict,
+        scheduler_config: Optional[dict] = None,
         dropout: float = 0.5,
         num_blocks: int = 4,
         base_channels: int = 32,
@@ -114,8 +114,6 @@ class CNNClassifier(pl.LightningModule):
             hidden_dim=hidden_dim,
         )
         
-        self.learning_rate = learning_rate
-        self.weight_decay = weight_decay
         self.num_classes = num_classes
         self.class_names = class_names or [str(i) for i in range(num_classes)]
         
@@ -357,31 +355,25 @@ class CNNClassifier(pl.LightningModule):
     
     def configure_optimizers(self):
         from hydra.utils import instantiate
-        from omegaconf import OmegaConf, DictConfig
+        from omegaconf import DictConfig
         
-        opt_cfg = OmegaConf.to_container(self._optimizer_config, resolve=True)
-        
-        # Separate scheduler config from optimizer config
-        scheduler_cfg_dict = opt_cfg.pop("scheduler", None)
-        
-        # Map learning_rate -> lr (PyTorch convention)
-        lr = opt_cfg.pop("learning_rate", self.learning_rate)
-        
-        # Instantiate optimizer via _target_
-        optimizer = instantiate(DictConfig(opt_cfg), params=self.parameters(), lr=lr)
+        # Instantiate optimizer from config
+        opt_cfg = dict(self.hparams.optimizer_config)
+        optimizer = instantiate(DictConfig(opt_cfg), params=self.parameters())
         
         # Instantiate scheduler if configured
-        if scheduler_cfg_dict is None or scheduler_cfg_dict.get("_target_") is None:
+        sched_cfg = self.hparams.scheduler_config
+        if sched_cfg is None or sched_cfg.get("_target_") is None:
             return optimizer
         
-        scheduler = instantiate(DictConfig(scheduler_cfg_dict), optimizer=optimizer)
+        scheduler = instantiate(DictConfig(dict(sched_cfg)), optimizer=optimizer)
         
         # ReduceLROnPlateau needs a monitor key
         lr_scheduler_config = {
             "scheduler": scheduler,
             "interval": "epoch",
         }
-        if "ReduceLROnPlateau" in scheduler_cfg_dict["_target_"]:
+        if "ReduceLROnPlateau" in sched_cfg["_target_"]:
             lr_scheduler_config["monitor"] = "val/loss"
         
         return {

@@ -118,19 +118,18 @@ def main(cfg: DictConfig):
     print(f"  Number of classes: {num_classes}")
 
     # Create model via Hydra instantiate — _target_ resolves the class
+    # optimizer_config and scheduler_config are passed as plain dicts so they're
+    # tracked by save_hyperparameters and safe for checkpoint serialization
     model = instantiate(
         cfg.model,
         in_channels=len(cfg.datamodule.dataset.channels),
         num_classes=num_classes,
-        learning_rate=cfg.optimizer.learning_rate,
-        weight_decay=cfg.optimizer.weight_decay,
-        class_names=datamodule.label_encoder.classes,
+        optimizer_config=OmegaConf.to_container(cfg.optimizer.optimizer, resolve=True),
+        scheduler_config=OmegaConf.to_container(cfg.optimizer.scheduler, resolve=True),
+        class_names=list(datamodule.label_encoder.classes),
         _convert_="all",
+        _recursive_=False,
     )
-    
-    # Store optimizer and scheduler config in model for configure_optimizers
-    model._optimizer_config = cfg.optimizer
-    model._scheduler_config = cfg.optimizer.scheduler
     
     # Setup callbacks — instantiate every entry in the callbacks list from config
     callbacks = [instantiate(cb_cfg) for cb_cfg in cfg.callbacks]
