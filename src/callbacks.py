@@ -134,19 +134,37 @@ class LogBestModelToMLflow(Callback):
                 
                 # Build description from model hyperparams
                 hp = pl_module.hparams
-                num_blocks = hp.get('num_blocks', '?')
-                base_channels = hp.get('base_channels', '?')
-                channel_multiplier = hp.get('channel_multiplier', '?')
-                hidden_dim = hp.get('hidden_dim', '?')
-                description = (
-                    f"Run: {run_name}\n"
-                    f"Architecture: {num_blocks} blocks, {base_channels} base_ch, "
-                    f"x{channel_multiplier} growth, {hidden_dim} hidden\n"
-                    f"Val score: {current_best:.4f}\n"
-                    f"in_channels={hp.get('in_channels','?')}, "
-                    f"num_classes={hp.get('num_classes','?')}, "
-                    f"dropout={hp.get('dropout','?')}"
-                )
+                
+                # Detect model type and build appropriate description
+                backbone_name = hp.get('backbone_name', None)
+                if backbone_name:
+                    # Transfer learning model
+                    pretrained = hp.get('pretrained', True)
+                    freeze_backbone = hp.get('freeze_backbone', False)
+                    description = (
+                        f"Run: {run_name}\n"
+                        f"Backbone: {backbone_name} (pretrained={pretrained}, frozen={freeze_backbone})\n"
+                        f"Val score: {current_best:.4f}\n"
+                        f"in_channels={hp.get('in_channels','?')}, "
+                        f"num_classes={hp.get('num_classes','?')}, "
+                        f"dropout={hp.get('dropout','?')}"
+                    )
+                else:
+                    # SimpleCNN model
+                    num_blocks = hp.get('num_blocks', '?')
+                    base_channels = hp.get('base_channels', '?')
+                    channel_multiplier = hp.get('channel_multiplier', '?')
+                    hidden_dim = hp.get('hidden_dim', '?')
+                    description = (
+                        f"Run: {run_name}\n"
+                        f"Architecture: {num_blocks} blocks, {base_channels} base_ch, "
+                        f"x{channel_multiplier} growth, {hidden_dim} hidden\n"
+                        f"Val score: {current_best:.4f}\n"
+                        f"in_channels={hp.get('in_channels','?')}, "
+                        f"num_classes={hp.get('num_classes','?')}, "
+                        f"dropout={hp.get('dropout','?')}"
+                    )
+                
                 client.update_model_version(
                     name=registered_model_name,
                     version=model_version,
@@ -155,11 +173,19 @@ class LogBestModelToMLflow(Callback):
                 
                 # Add searchable tags to the model version
                 client.set_model_version_tag(registered_model_name, model_version, "run_name", run_name)
-                client.set_model_version_tag(registered_model_name, model_version, "num_blocks", str(num_blocks))
-                client.set_model_version_tag(registered_model_name, model_version, "base_channels", str(base_channels))
-                client.set_model_version_tag(registered_model_name, model_version, "channel_multiplier", str(channel_multiplier))
-                client.set_model_version_tag(registered_model_name, model_version, "hidden_dim", str(hidden_dim))
                 client.set_model_version_tag(registered_model_name, model_version, "val_score", f"{current_best:.4f}")
+                
+                if backbone_name:
+                    # Transfer learning tags
+                    client.set_model_version_tag(registered_model_name, model_version, "backbone_name", backbone_name)
+                    client.set_model_version_tag(registered_model_name, model_version, "pretrained", str(hp.get('pretrained', True)))
+                    client.set_model_version_tag(registered_model_name, model_version, "freeze_backbone", str(hp.get('freeze_backbone', False)))
+                else:
+                    # SimpleCNN tags
+                    client.set_model_version_tag(registered_model_name, model_version, "num_blocks", str(hp.get('num_blocks', '?')))
+                    client.set_model_version_tag(registered_model_name, model_version, "base_channels", str(hp.get('base_channels', '?')))
+                    client.set_model_version_tag(registered_model_name, model_version, "channel_multiplier", str(hp.get('channel_multiplier', '?')))
+                    client.set_model_version_tag(registered_model_name, model_version, "hidden_dim", str(hp.get('hidden_dim', '?')))
             except Exception as tag_err:
                 rank_zero_info(f"LogBestModelToMLflow: Could not set model version description/tags: {tag_err}")
             

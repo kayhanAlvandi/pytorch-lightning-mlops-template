@@ -1,0 +1,5 @@
+_target_: src.model.TransferLearningClassifier
+backbone_name: resnet18
+pretrained: true
+freeze_backbone: false
+dropout: 0.5

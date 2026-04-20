@@ -1,11 +1,14 @@
 """Simple CNN model with PyTorch Lightning."""
 from typing import Any, Dict, List, Optional
 
+import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import pytorch_lightning as pl
 from torchmetrics import Accuracy, F1Score, ConfusionMatrix
+import timm
 import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend for threading
 import matplotlib.pyplot as plt
@@ -85,34 +88,132 @@ class SimpleCNN(nn.Module):
         return x
 
 
-class CNNClassifier(pl.LightningModule):
-    """PyTorch Lightning module for CNN classification."""
+class TransferLearningBackbone(nn.Module):
+    """Transfer learning backbone using timm pretrained models.
+    
+    Supports ResNet, EfficientNet, and Vision Transformer (ViT) architectures
+    with options for freezing the backbone for feature extraction.
+    
+    Args:
+        backbone_name: Name of the backbone model (e.g., 'resnet50', 'efficientnet_b0', 'vit_base_patch16_224')
+        in_channels: Number of input channels (will adapt first conv if != 3)
+        num_classes: Number of output classes
+        pretrained: Whether to use pretrained weights
+        freeze_backbone: Whether to freeze backbone weights (feature extraction mode)
+        dropout: Dropout rate for classifier head
+    """
+    
+    # Mapping of simple names to timm model names
+    MODEL_MAPPING = {
+        # ResNet variants
+        'resnet18': 'resnet18',
+        'resnet34': 'resnet34',
+        'resnet50': 'resnet50',
+        'resnet101': 'resnet101',
+        # EfficientNet variants
+        'efficientnet_b0': 'efficientnet_b0',
+        'efficientnet_b1': 'efficientnet_b1',
+        'efficientnet_b2': 'efficientnet_b2',
+        'efficientnet_b3': 'efficientnet_b3',
+        'efficientnet_b4': 'efficientnet_b4',
+        # Vision Transformer variants
+        'vit_tiny': 'vit_tiny_patch16_224',
+        'vit_small': 'vit_small_patch16_224',
+        'vit_base': 'vit_base_patch16_224',
+        'vit_large': 'vit_large_patch16_224',
+    }
     
     def __init__(
         self,
+        backbone_name: str,
         in_channels: int,
+        num_classes: int,
+        pretrained: bool = True,
+        freeze_backbone: bool = False,
+        dropout: float = 0.5,
+    ):
+        super().__init__()
+        
+        self.backbone_name = backbone_name
+        self.freeze_backbone = freeze_backbone
+        
+        # Get timm model name
+        timm_name = self.MODEL_MAPPING.get(backbone_name, backbone_name)
+        
+        # Create backbone without classifier head
+        self.backbone = timm.create_model(
+            timm_name,
+            pretrained=pretrained,
+            num_classes=0,  # Remove classifier head
+            in_chans=in_channels,
+        )
+        
+        # Get feature dimension from backbone
+        self.feature_dim = self.backbone.num_features
+        
+        # Create custom classifier head
+        self.classifier = nn.Sequential(
+            nn.Dropout(dropout),
+            nn.Linear(self.feature_dim, num_classes),
+        )
+        
+        # Freeze backbone if requested
+        if freeze_backbone:
+            self._freeze_backbone()
+    
+    def _freeze_backbone(self):
+        """Freeze all backbone parameters."""
+        for param in self.backbone.parameters():
+            param.requires_grad = False
+        print(f"Backbone '{self.backbone_name}' frozen - only classifier head will be trained")
+    
+    def unfreeze_backbone(self, unfreeze_layers: Optional[int] = None):
+        """Unfreeze backbone parameters.
+        
+        Args:
+            unfreeze_layers: If provided, only unfreeze the last N layers.
+                           If None, unfreeze all layers.
+        """
+        if unfreeze_layers is None:
+            for param in self.backbone.parameters():
+                param.requires_grad = True
+            print(f"Backbone '{self.backbone_name}' fully unfrozen")
+        else:
+            # Get all named parameters as a list
+            params = list(self.backbone.named_parameters())
+            # Unfreeze last N layers
+            for name, param in params[-unfreeze_layers:]:
+                param.requires_grad = True
+            print(f"Unfroze last {unfreeze_layers} layers of backbone '{self.backbone_name}'")
+    
+    def get_trainable_params(self) -> int:
+        """Return count of trainable parameters."""
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+    
+    def get_total_params(self) -> int:
+        """Return count of total parameters."""
+        return sum(p.numel() for p in self.parameters())
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        features = self.backbone(x)
+        return self.classifier(features)
+
+
+class BaseClassifier(pl.LightningModule):
+    """Base PyTorch Lightning module for image classification.
+    
+    Provides shared training, validation, and logging logic.
+    Subclasses must set self.model in their __init__.
+    """
+    
+    def __init__(
+        self,
         num_classes: int,
         optimizer_config: dict,
         scheduler_config: Optional[dict] = None,
-        dropout: float = 0.5,
-        num_blocks: int = 4,
-        base_channels: int = 32,
-        channel_multiplier: float = 2.0,
-        hidden_dim: int = 128,
         class_names: Optional[List[str]] = None,
     ):
         super().__init__()
-        self.save_hyperparameters()
-        
-        self.model = SimpleCNN(
-            in_channels=in_channels,
-            num_classes=num_classes,
-            dropout=dropout,
-            num_blocks=num_blocks,
-            base_channels=base_channels,
-            channel_multiplier=channel_multiplier,
-            hidden_dim=hidden_dim,
-        )
         
         self.num_classes = num_classes
         self.class_names = class_names or [str(i) for i in range(num_classes)]
@@ -179,11 +280,14 @@ class CNNClassifier(pl.LightningModule):
                     grad_norms[short_name] = param_norm
             
             total_norm = total_norm ** 0.5
-            self.log("grad/total_norm", total_norm, on_step=True, on_epoch=False)
+            
+            # Only log finite values to avoid MLflow UI errors
+            if math.isfinite(total_norm):
+                self.log("grad/total_norm", total_norm, on_step=True, on_epoch=False)
             
             # Log first and last layer gradients
             for key in ["features.0.w", "classifier.4.w"]:
-                if key in grad_norms:
+                if key in grad_norms and math.isfinite(grad_norms[key]):
                     self.log(f"grad/{key}", grad_norms[key], on_step=True, on_epoch=False)
             
             if total_norm > self.grad_alert_threshold:
@@ -380,3 +484,112 @@ class CNNClassifier(pl.LightningModule):
             "optimizer": optimizer,
             "lr_scheduler": lr_scheduler_config,
         }
+
+
+class CNNClassifier(BaseClassifier):
+    """PyTorch Lightning module for SimpleCNN classification.
+    
+    Args:
+        in_channels: Number of input channels
+        num_classes: Number of output classes
+        optimizer_config: Optimizer configuration dict
+        scheduler_config: Optional scheduler configuration dict
+        dropout: Dropout rate
+        num_blocks: Number of conv blocks
+        base_channels: Starting channels
+        channel_multiplier: Channel growth factor
+        hidden_dim: Hidden layer dimension
+        class_names: Optional list of class names for visualization
+    """
+    
+    def __init__(
+        self,
+        in_channels: int,
+        num_classes: int,
+        optimizer_config: dict,
+        scheduler_config: Optional[dict] = None,
+        dropout: float = 0.5,
+        num_blocks: int = 4,
+        base_channels: int = 32,
+        channel_multiplier: float = 2.0,
+        hidden_dim: int = 128,
+        class_names: Optional[List[str]] = None,
+    ):
+        super().__init__(
+            num_classes=num_classes,
+            optimizer_config=optimizer_config,
+            scheduler_config=scheduler_config,
+            class_names=class_names,
+        )
+        self.save_hyperparameters()
+        
+        self.model = SimpleCNN(
+            in_channels=in_channels,
+            num_classes=num_classes,
+            dropout=dropout,
+            num_blocks=num_blocks,
+            base_channels=base_channels,
+            channel_multiplier=channel_multiplier,
+            hidden_dim=hidden_dim,
+        )
+
+
+class TransferLearningClassifier(BaseClassifier):
+    """PyTorch Lightning module for transfer learning classification.
+    
+    Supports ResNet, EfficientNet, and Vision Transformer (ViT) architectures.
+    
+    Args:
+        backbone_name: Name of the backbone model (e.g., 'resnet50', 'efficientnet_b0', 'vit_base')
+        in_channels: Number of input channels
+        num_classes: Number of output classes
+        optimizer_config: Optimizer configuration dict
+        scheduler_config: Optional scheduler configuration dict
+        pretrained: Whether to use pretrained weights
+        freeze_backbone: Whether to freeze backbone (feature extraction mode)
+        dropout: Dropout rate for classifier head
+        class_names: Optional list of class names for visualization
+    """
+    
+    def __init__(
+        self,
+        backbone_name: str,
+        in_channels: int,
+        num_classes: int,
+        optimizer_config: dict,
+        scheduler_config: Optional[dict] = None,
+        pretrained: bool = True,
+        freeze_backbone: bool = False,
+        dropout: float = 0.5,
+        class_names: Optional[List[str]] = None,
+    ):
+        super().__init__(
+            num_classes=num_classes,
+            optimizer_config=optimizer_config,
+            scheduler_config=scheduler_config,
+            class_names=class_names,
+        )
+        self.save_hyperparameters()
+        
+        self.model = TransferLearningBackbone(
+            backbone_name=backbone_name,
+            in_channels=in_channels,
+            num_classes=num_classes,
+            pretrained=pretrained,
+            freeze_backbone=freeze_backbone,
+            dropout=dropout,
+        )
+        
+        # Log parameter counts
+        total_params = self.model.get_total_params()
+        trainable_params = self.model.get_trainable_params()
+        print(f"Model: {backbone_name} | Total params: {total_params:,} | Trainable: {trainable_params:,} ({100*trainable_params/total_params:.1f}%)")
+    
+    def unfreeze_backbone(self, unfreeze_layers: Optional[int] = None):
+        """Unfreeze backbone parameters for fine-tuning.
+        
+        Args:
+            unfreeze_layers: If provided, only unfreeze the last N layers.
+                           If None, unfreeze all layers.
+        """
+        self.model.unfreeze_backbone(unfreeze_layers)

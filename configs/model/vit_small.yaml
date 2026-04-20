@@ -1,0 +1,5 @@
+_target_: src.model.TransferLearningClassifier
+backbone_name: vit_small
+pretrained: true
+freeze_backbone: true
+dropout: 0.5

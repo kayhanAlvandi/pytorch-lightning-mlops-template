@@ -1,0 +1,5 @@
+_target_: src.model.TransferLearningClassifier
+backbone_name: efficientnet_b0
+pretrained: true
+freeze_backbone: false
+dropout: 0.5
