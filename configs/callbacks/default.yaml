@@ -14,8 +14,8 @@
 - _target_: src.callbacks.LogBestModelToMLflow
   artifact_path: best_model
 
-# Uncomment to enable early stopping:
-# - _target_: pytorch_lightning.callbacks.EarlyStopping
-#   monitor: "val/loss"
-#   patience: 10
-#   mode: min
+#Uncomment to enable early stopping:
+- _target_: pytorch_lightning.callbacks.EarlyStopping
+  monitor: "val/loss"
+  patience: 10
+  mode: min

@@ -112,7 +112,7 @@ def run_benchmark():
     """Run full benchmark suite."""
     from hydra import compose, initialize_config_dir
     
-    config_dir = str(Path(__file__).parent / "configs")
+    config_dir = str(Path(__file__).parent.parent / "configs")
     with initialize_config_dir(config_dir=config_dir, version_base=None):
         cfg = compose(config_name="config")
     
