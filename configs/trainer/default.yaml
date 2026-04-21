@@ -1,5 +1,6 @@
 _target_: pytorch_lightning.Trainer
 max_epochs: 50
+min_epochs: null
 accelerator: cuda
 devices: 1
 precision: "16-mixed"

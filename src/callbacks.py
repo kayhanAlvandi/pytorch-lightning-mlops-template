@@ -204,3 +204,87 @@ class LogBestModelToMLflow(Callback):
     @rank_zero_only
     def on_exception(self, trainer, pl_module, exception) -> None:
         self._log_best_model(trainer, pl_module)
+
+
+class EarlyStoppingWithWarmup(Callback):
+    """Early stopping callback that only starts monitoring after a warmup period.
+    
+    Unlike the standard EarlyStopping with trainer.min_epochs, this callback
+    does NOT accumulate patience during the warmup period. Patience counting
+    only begins after min_epochs is reached.
+    
+    Args:
+        monitor: Metric to monitor (e.g., 'val/loss')
+        min_epochs: Number of epochs before early stopping can activate
+        patience: Number of checks with no improvement after min_epochs before stopping
+        min_delta: Minimum change to qualify as an improvement
+        mode: 'min' or 'max' - whether to minimize or maximize the metric
+    """
+    
+    def __init__(
+        self,
+        monitor: str = "val/loss",
+        min_epochs: int = 30,
+        patience: int = 20,
+        min_delta: float = 0.0,
+        mode: str = "min",
+    ):
+        super().__init__()
+        self.monitor = monitor
+        self.min_epochs = min_epochs
+        self.patience = patience
+        self.min_delta = min_delta
+        self.mode = mode
+        
+        self.best_score = None
+        self.wait_count = 0
+        
+        if mode == "min":
+            self.monitor_op = lambda current, best: current < best - min_delta
+        elif mode == "max":
+            self.monitor_op = lambda current, best: current > best + min_delta
+        else:
+            raise ValueError(f"mode must be 'min' or 'max', got {mode}")
+    
+    def on_validation_end(self, trainer, pl_module) -> None:
+        current_epoch = trainer.current_epoch
+        
+        # Don't do anything during warmup period
+        if current_epoch < self.min_epochs:
+            return
+        
+        # Get current metric value
+        logs = trainer.callback_metrics
+        current = logs.get(self.monitor)
+        
+        if current is None:
+            rank_zero_info(f"EarlyStoppingWithWarmup: {self.monitor} not found in metrics")
+            return
+        
+        current = current.item() if hasattr(current, 'item') else float(current)
+        
+        # Initialize best score on first check after warmup
+        if self.best_score is None:
+            self.best_score = current
+            rank_zero_info(
+                f"EarlyStoppingWithWarmup: Started monitoring at epoch {current_epoch}, "
+                f"initial {self.monitor}={current:.4f}"
+            )
+            return
+        
+        # Check for improvement
+        if self.monitor_op(current, self.best_score):
+            self.best_score = current
+            self.wait_count = 0
+        else:
+            self.wait_count += 1
+            rank_zero_info(
+                f"EarlyStoppingWithWarmup: No improvement for {self.wait_count}/{self.patience} epochs "
+                f"(best={self.best_score:.4f}, current={current:.4f})"
+            )
+            
+            if self.wait_count >= self.patience:
+                rank_zero_info(
+                    f"EarlyStoppingWithWarmup: Stopping training at epoch {current_epoch}"
+                )
+                trainer.should_stop = True
