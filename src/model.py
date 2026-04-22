@@ -226,11 +226,16 @@ class BaseClassifier(pl.LightningModule):
         self.val_acc = Accuracy(task="multiclass", num_classes=num_classes)
         self.val_f1 = F1Score(task="multiclass", num_classes=num_classes, average="macro")
         self.val_confmat = ConfusionMatrix(task="multiclass", num_classes=num_classes)
+        self.test_acc = Accuracy(task="multiclass", num_classes=num_classes)
+        self.test_f1 = F1Score(task="multiclass", num_classes=num_classes, average="macro")
+        self.test_confmat = ConfusionMatrix(task="multiclass", num_classes=num_classes)
         
-        # Store validation outputs for logging
-        self.val_images = []
-        self.val_preds = []
-        self.val_labels = []
+        # Store validation outputs for logging (2 images per class)
+        self._val_class_images: Dict[int, List] = {}  # class_idx -> [(image, pred, label), ...]
+        self._n_images_per_class = 2
+        
+        # Store test outputs for logging
+        self._test_class_images: Dict[int, List] = {}
         
         # Gradient monitoring
         self.grad_alert_threshold = 1e5
@@ -319,40 +324,54 @@ class BaseClassifier(pl.LightningModule):
         self.log("val/acc", self.val_acc, on_step=False, on_epoch=True, prog_bar=True)
         self.log("val/f1", self.val_f1, on_step=False, on_epoch=True, prog_bar=True)
         
-        # Store first batch images for visualization
-        if batch_idx == 0:
-            self.val_images = images[:8].detach().cpu()  # Keep first 8 images
-            self.val_preds = preds[:8].detach().cpu()
-            self.val_labels = labels[:8].detach().cpu()
+        # Collect 2 images per class for balanced visualization
+        for i in range(len(labels)):
+            cls = labels[i].item()
+            if cls not in self._val_class_images:
+                self._val_class_images[cls] = []
+            if len(self._val_class_images[cls]) < self._n_images_per_class:
+                self._val_class_images[cls].append((
+                    images[i].detach().cpu(),
+                    preds[i].detach().cpu(),
+                    labels[i].detach().cpu(),
+                ))
         
         return {"val_loss": loss, "preds": preds, "labels": labels}
     
+    def _collect_class_balanced_samples(self, class_images_dict):
+        """Flatten class-balanced image dict into (images, preds, labels) tensors."""
+        images, preds, labels = [], [], []
+        for cls in sorted(class_images_dict.keys()):
+            for img, pred, label in class_images_dict[cls]:
+                images.append(img)
+                preds.append(pred)
+                labels.append(label)
+        if not images:
+            return None, None, None
+        return torch.stack(images), torch.stack(preds), torch.stack(labels)
+    
     def on_validation_epoch_end(self):
-        """Log confusion matrix and sample images at end of validation."""
-        # Log confusion matrix
+        """Log confusion matrix and sample images to TensorBoard only."""
+        # Log confusion matrix to TensorBoard
         confmat = self.val_confmat.compute().cpu().numpy()
         fig_cm = self._plot_confusion_matrix(confmat)
         
-        # Log to TensorBoard
         if hasattr(self.logger, 'experiment') and hasattr(self.logger.experiment, 'add_figure'):
             self.logger.experiment.add_figure("val/confusion_matrix", fig_cm, self.current_epoch)
-        
-        # Log to MLflow
-        self._log_figure_to_mlflow(fig_cm, f"confusion_matrix_epoch_{self.current_epoch}.png")
         plt.close(fig_cm)
         self.val_confmat.reset()
         
-        # Log sample images with predictions
-        if len(self.val_images) > 0:
-            fig_pred = self._plot_predictions(self.val_images, self.val_preds, self.val_labels)
+        # Log sample images with predictions to TensorBoard (2 per class)
+        images, preds, labels = self._collect_class_balanced_samples(self._val_class_images)
+        if images is not None:
+            fig_pred = self._plot_predictions(images, preds, labels)
             
-            # Log to TensorBoard
             if hasattr(self.logger, 'experiment') and hasattr(self.logger.experiment, 'add_figure'):
                 self.logger.experiment.add_figure("val/predictions", fig_pred, self.current_epoch)
-            
-            # Log to MLflow
-            self._log_figure_to_mlflow(fig_pred, f"predictions_epoch_{self.current_epoch}.png")
             plt.close(fig_pred)
+        
+        # Reset for next epoch
+        self._val_class_images = {}
     
     def _log_figure_to_mlflow(self, fig: plt.Figure, filename: str) -> None:
         """Log a matplotlib figure to MLflow if MLflow logger is available."""
@@ -382,7 +401,7 @@ class BaseClassifier(pl.LightningModule):
         except Exception:
             pass  # Silently skip if MLflow logging fails
     
-    def _plot_confusion_matrix(self, confmat: np.ndarray) -> plt.Figure:
+    def _plot_confusion_matrix(self, confmat: np.ndarray, title: str = "Confusion Matrix") -> plt.Figure:
         """Create confusion matrix figure."""
         fig, ax = plt.subplots(figsize=(8, 8))
         im = ax.imshow(confmat, interpolation='nearest', cmap=plt.cm.Blues)
@@ -395,7 +414,7 @@ class BaseClassifier(pl.LightningModule):
             yticklabels=self.class_names,
             ylabel='True label',
             xlabel='Predicted label',
-            title='Confusion Matrix'
+            title=title
         )
         
         plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
@@ -411,11 +430,19 @@ class BaseClassifier(pl.LightningModule):
         fig.tight_layout()
         return fig
     
-    def _plot_predictions(self, images: torch.Tensor, preds: torch.Tensor, labels: torch.Tensor) -> plt.Figure:
-        """Create figure with sample images and their predictions."""
-        n_images = min(8, len(images))
-        fig, axes = plt.subplots(2, 4, figsize=(12, 6))
-        axes = axes.flatten()
+    def _plot_predictions(self, images: torch.Tensor, preds: torch.Tensor, labels: torch.Tensor, title: str = None) -> plt.Figure:
+        """Create figure with sample images and their predictions.
+        
+        Grid layout adapts to number of images (2 per class).
+        """
+        n_images = len(images)
+        n_cols = min(n_images, self.num_classes)  # One column per class
+        n_rows = max(1, (n_images + n_cols - 1) // n_cols)  # Enough rows
+        
+        fig, axes = plt.subplots(n_rows, n_cols, figsize=(3 * n_cols, 3 * n_rows))
+        if n_rows == 1 and n_cols == 1:
+            axes = np.array([axes])
+        axes = np.atleast_2d(axes).flatten()
         
         for i in range(n_images):
             img = images[i]
@@ -439,10 +466,12 @@ class BaseClassifier(pl.LightningModule):
             axes[i].axis('off')
         
         # Hide unused axes
-        for i in range(n_images, 8):
+        for i in range(n_images, len(axes)):
             axes[i].axis('off')
         
-        fig.suptitle(f'Validation Predictions (Epoch {self.current_epoch})', fontsize=12)
+        if title is None:
+            title = f'Predictions (Epoch {self.current_epoch})'
+        fig.suptitle(title, fontsize=12)
         fig.tight_layout()
         return fig
     
@@ -452,10 +481,45 @@ class BaseClassifier(pl.LightningModule):
         loss = self.criterion(logits, labels)
         
         preds = torch.argmax(logits, dim=1)
+        self.test_acc(preds, labels)
+        self.test_f1(preds, labels)
+        self.test_confmat(preds, labels)
         
         self.log("test/loss", loss)
+        self.log("test/acc", self.test_acc, on_step=False, on_epoch=True)
+        self.log("test/f1", self.test_f1, on_step=False, on_epoch=True)
+        
+        # Collect 2 images per class for balanced visualization
+        for i in range(len(labels)):
+            cls = labels[i].item()
+            if cls not in self._test_class_images:
+                self._test_class_images[cls] = []
+            if len(self._test_class_images[cls]) < self._n_images_per_class:
+                self._test_class_images[cls].append((
+                    images[i].detach().cpu(),
+                    preds[i].detach().cpu(),
+                    labels[i].detach().cpu(),
+                ))
         
         return {"test_loss": loss, "preds": preds, "labels": labels}
+    
+    def on_test_epoch_end(self):
+        """Log confusion matrix and prediction images to MLflow (best model)."""
+        # Confusion matrix
+        confmat = self.test_confmat.compute().cpu().numpy()
+        fig_cm = self._plot_confusion_matrix(confmat, title="Test Confusion Matrix (Best Model)")
+        self._log_figure_to_mlflow(fig_cm, "test_confusion_matrix.png")
+        plt.close(fig_cm)
+        self.test_confmat.reset()
+        
+        # Prediction images (2 per class)
+        images, preds, labels = self._collect_class_balanced_samples(self._test_class_images)
+        if images is not None:
+            fig_pred = self._plot_predictions(images, preds, labels, title="Test Predictions (Best Model)")
+            self._log_figure_to_mlflow(fig_pred, "test_predictions.png")
+            plt.close(fig_pred)
+        
+        self._test_class_images = {}
     
     def configure_optimizers(self):
         from hydra.utils import instantiate
