@@ -3,6 +3,7 @@ defaults:
   - datamodule: tiled
   - model: simplecnn
   - optimizer: adamw
+  - loss: cross_entropy
   - callbacks: default
   - trainer: default
   - _self_

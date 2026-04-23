@@ -1,5 +1,6 @@
 """Simple CNN model with PyTorch Lightning."""
-from typing import Any, Dict, List, Optional
+from functools import partial
+from typing import Any, Callable, Dict, List, Optional, Union
 
 import math
 
@@ -204,12 +205,22 @@ class BaseClassifier(pl.LightningModule):
     
     Provides shared training, validation, and logging logic.
     Subclasses must set self.model in their __init__.
+    
+    Accepts either:
+      - Live objects from Hydra (during training):
+            criterion=nn.CrossEntropyLoss(), optimizer=partial(AdamW, lr=0.001), ...
+      - Config dicts from checkpoint (during load_from_checkpoint):
+            criterion_config={"_target_": "torch.nn.CrossEntropyLoss"}, ...
     """
     
     def __init__(
         self,
         num_classes: int,
-        optimizer_config: dict,
+        criterion: Optional[nn.Module] = None,
+        optimizer: Optional[partial] = None,
+        scheduler: Optional[partial] = None,
+        criterion_config: Optional[dict] = None,
+        optimizer_config: Optional[dict] = None,
         scheduler_config: Optional[dict] = None,
         class_names: Optional[List[str]] = None,
     ):
@@ -218,8 +229,10 @@ class BaseClassifier(pl.LightningModule):
         self.num_classes = num_classes
         self.class_names = class_names or [str(i) for i in range(num_classes)]
         
-        # Loss function
-        self.criterion = nn.CrossEntropyLoss()
+        # Resolve criterion, optimizer, scheduler from either live objects or config dicts
+        self.criterion, self._optimizer_partial, self._scheduler_partial = \
+            self._resolve_components(criterion, optimizer, scheduler,
+                                     criterion_config, optimizer_config, scheduler_config)
         
         # Metrics
         self.train_acc = Accuracy(task="multiclass", num_classes=num_classes)
@@ -240,6 +253,86 @@ class BaseClassifier(pl.LightningModule):
         # Gradient monitoring
         self.grad_alert_threshold = 1e5
         self._last_batch_meta: Dict[str, Any] = {}
+    
+    @staticmethod
+    def _import_class(dotpath: str):
+        """Import a class from a dot-separated module path (e.g., 'torch.optim.AdamW')."""
+        module_path, class_name = dotpath.rsplit(".", 1)
+        import importlib
+        module = importlib.import_module(module_path)
+        return getattr(module, class_name)
+    
+    @staticmethod
+    def _partial_to_config(p: partial) -> dict:
+        """Convert a functools.partial to a serializable config dict."""
+        if p is None:
+            return None
+        return {
+            "_target_": f"{p.func.__module__}.{p.func.__qualname__}",
+            **{k: v for k, v in p.keywords.items()},
+        }
+    
+    @staticmethod
+    def _criterion_to_config(criterion: nn.Module) -> dict:
+        """Convert an instantiated criterion to a serializable config dict."""
+        import inspect
+        cls = type(criterion)
+        config = {"_target_": f"{cls.__module__}.{cls.__qualname__}"}
+        # Get actual constructor params via inspect, not __dict__ (which has runtime state)
+        sig = inspect.signature(cls.__init__)
+        for param_name in sig.parameters:
+            if param_name == "self":
+                continue
+            if hasattr(criterion, param_name):
+                val = getattr(criterion, param_name)
+                if not isinstance(val, (torch.Tensor, nn.Module)):
+                    config[param_name] = val
+        return config
+    
+    def _resolve_components(self, criterion, optimizer, scheduler,
+                            criterion_config, optimizer_config, scheduler_config):
+        """Resolve criterion/optimizer/scheduler from live objects or config dicts.
+        
+        During training: live objects are passed (from Hydra instantiation).
+        During checkpoint loading: config dicts are passed (from saved hparams).
+        """
+        # Resolve criterion
+        if criterion is not None:
+            resolved_criterion = criterion
+        elif criterion_config is not None:
+            cfg = dict(criterion_config)
+            cls = self._import_class(cfg.pop("_target_"))
+            resolved_criterion = cls(**cfg)
+        else:
+            resolved_criterion = nn.CrossEntropyLoss()
+        
+        # Resolve optimizer
+        if optimizer is not None:
+            resolved_optimizer = optimizer
+        elif optimizer_config is not None:
+            cfg = dict(optimizer_config)
+            cls = self._import_class(cfg.pop("_target_"))
+            resolved_optimizer = partial(cls, **cfg)
+        else:
+            resolved_optimizer = partial(torch.optim.AdamW, lr=1e-3)
+        
+        # Resolve scheduler
+        if scheduler is not None:
+            resolved_scheduler = scheduler
+        elif scheduler_config is not None:
+            cfg = dict(scheduler_config)
+            cls = self._import_class(cfg.pop("_target_"))
+            resolved_scheduler = partial(cls, **cfg)
+        else:
+            resolved_scheduler = None
+        
+        return resolved_criterion, resolved_optimizer, resolved_scheduler
+    
+    def _save_config_hparams(self, criterion, optimizer, scheduler):
+        """Store serializable config dicts in hparams for checkpoint serialization."""
+        self.hparams["criterion_config"] = self._criterion_to_config(criterion)
+        self.hparams["optimizer_config"] = self._partial_to_config(optimizer)
+        self.hparams["scheduler_config"] = self._partial_to_config(scheduler)
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x)
@@ -522,26 +615,21 @@ class BaseClassifier(pl.LightningModule):
         self._test_class_images = {}
     
     def configure_optimizers(self):
-        from hydra.utils import instantiate
-        from omegaconf import DictConfig
+        # Complete the partial optimizer with model parameters
+        optimizer = self._optimizer_partial(params=self.parameters())
         
-        # Instantiate optimizer from config
-        opt_cfg = dict(self.hparams.optimizer_config)
-        optimizer = instantiate(DictConfig(opt_cfg), params=self.parameters())
-        
-        # Instantiate scheduler if configured
-        sched_cfg = self.hparams.scheduler_config
-        if sched_cfg is None or sched_cfg.get("_target_") is None:
+        # Complete the partial scheduler with optimizer, if configured
+        if self._scheduler_partial is None:
             return optimizer
         
-        scheduler = instantiate(DictConfig(dict(sched_cfg)), optimizer=optimizer)
+        scheduler = self._scheduler_partial(optimizer=optimizer)
         
         # ReduceLROnPlateau needs a monitor key
         lr_scheduler_config = {
             "scheduler": scheduler,
             "interval": "epoch",
         }
-        if "ReduceLROnPlateau" in sched_cfg["_target_"]:
+        if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
             lr_scheduler_config["monitor"] = "val/loss"
         
         return {
@@ -551,26 +639,17 @@ class BaseClassifier(pl.LightningModule):
 
 
 class CNNClassifier(BaseClassifier):
-    """PyTorch Lightning module for SimpleCNN classification.
-    
-    Args:
-        in_channels: Number of input channels
-        num_classes: Number of output classes
-        optimizer_config: Optimizer configuration dict
-        scheduler_config: Optional scheduler configuration dict
-        dropout: Dropout rate
-        num_blocks: Number of conv blocks
-        base_channels: Starting channels
-        channel_multiplier: Channel growth factor
-        hidden_dim: Hidden layer dimension
-        class_names: Optional list of class names for visualization
-    """
+    """PyTorch Lightning module for SimpleCNN classification."""
     
     def __init__(
         self,
         in_channels: int,
         num_classes: int,
-        optimizer_config: dict,
+        criterion: Optional[nn.Module] = None,
+        optimizer: Optional[partial] = None,
+        scheduler: Optional[partial] = None,
+        criterion_config: Optional[dict] = None,
+        optimizer_config: Optional[dict] = None,
         scheduler_config: Optional[dict] = None,
         dropout: float = 0.5,
         num_blocks: int = 4,
@@ -581,11 +660,18 @@ class CNNClassifier(BaseClassifier):
     ):
         super().__init__(
             num_classes=num_classes,
+            criterion=criterion,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            criterion_config=criterion_config,
             optimizer_config=optimizer_config,
             scheduler_config=scheduler_config,
             class_names=class_names,
         )
-        self.save_hyperparameters()
+        self.save_hyperparameters(ignore=["criterion", "optimizer", "scheduler"])
+        self._save_config_hparams(
+            self.criterion, self._optimizer_partial, self._scheduler_partial
+        )
         
         self.model = SimpleCNN(
             in_channels=in_channels,
@@ -602,17 +688,6 @@ class TransferLearningClassifier(BaseClassifier):
     """PyTorch Lightning module for transfer learning classification.
     
     Supports ResNet, EfficientNet, and Vision Transformer (ViT) architectures.
-    
-    Args:
-        backbone_name: Name of the backbone model (e.g., 'resnet50', 'efficientnet_b0', 'vit_base')
-        in_channels: Number of input channels
-        num_classes: Number of output classes
-        optimizer_config: Optimizer configuration dict
-        scheduler_config: Optional scheduler configuration dict
-        pretrained: Whether to use pretrained weights
-        freeze_backbone: Whether to freeze backbone (feature extraction mode)
-        dropout: Dropout rate for classifier head
-        class_names: Optional list of class names for visualization
     """
     
     def __init__(
@@ -620,7 +695,11 @@ class TransferLearningClassifier(BaseClassifier):
         backbone_name: str,
         in_channels: int,
         num_classes: int,
-        optimizer_config: dict,
+        criterion: Optional[nn.Module] = None,
+        optimizer: Optional[partial] = None,
+        scheduler: Optional[partial] = None,
+        criterion_config: Optional[dict] = None,
+        optimizer_config: Optional[dict] = None,
         scheduler_config: Optional[dict] = None,
         pretrained: bool = True,
         freeze_backbone: bool = False,
@@ -629,11 +708,18 @@ class TransferLearningClassifier(BaseClassifier):
     ):
         super().__init__(
             num_classes=num_classes,
+            criterion=criterion,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            criterion_config=criterion_config,
             optimizer_config=optimizer_config,
             scheduler_config=scheduler_config,
             class_names=class_names,
         )
-        self.save_hyperparameters()
+        self.save_hyperparameters(ignore=["criterion", "optimizer", "scheduler"])
+        self._save_config_hparams(
+            self.criterion, self._optimizer_partial, self._scheduler_partial
+        )
         
         self.model = TransferLearningBackbone(
             backbone_name=backbone_name,

@@ -8,7 +8,7 @@ import pandas as pd
 import torch
 import pytorch_lightning as pl
 from hydra.utils import instantiate
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig, OmegaConf, open_dict
 
 from src.dataset_versioning import (
     create_dataset_metadata,
@@ -117,18 +117,28 @@ def main(cfg: DictConfig):
     print(f"  Total samples: {train_samples + val_samples}")
     print(f"  Number of classes: {num_classes}")
 
-    # Create model via Hydra instantiate — _target_ resolves the class
-    # optimizer_config and scheduler_config are passed as plain dicts so they're
-    # tracked by save_hyperparameters and safe for checkpoint serialization
-    model = instantiate(
+    # Build unified model config by merging model, optimizer, scheduler, and loss
+    # Hydra recursively instantiates:
+    #   - criterion: fully (all params known)
+    #   - optimizer: partially (_partial_=true, needs params=)
+    #   - scheduler: partially (_partial_=true, needs optimizer=)
+    # Disable struct mode to allow adding new keys (Hydra enables it by default)
+    OmegaConf.set_struct(cfg.model, False)
+    model_cfg = OmegaConf.merge(
         cfg.model,
+        {
+            "criterion": cfg.loss,
+            "optimizer": cfg.optimizer.optimizer,
+            "scheduler": cfg.optimizer.scheduler,
+        },
+    )
+    
+    model = instantiate(
+        model_cfg,
         in_channels=len(cfg.datamodule.dataset.channels),
         num_classes=num_classes,
-        optimizer_config=OmegaConf.to_container(cfg.optimizer.optimizer, resolve=True),
-        scheduler_config=OmegaConf.to_container(cfg.optimizer.scheduler, resolve=True),
         class_names=list(datamodule.label_encoder.classes),
         _convert_="all",
-        _recursive_=False,
     )
     
     # Setup callbacks — instantiate every entry in the callbacks list from config

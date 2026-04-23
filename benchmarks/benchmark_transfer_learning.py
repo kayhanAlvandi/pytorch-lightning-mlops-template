@@ -1,10 +1,6 @@
 """Benchmark script to compare transfer learning models with frozen backbones vs SimpleCNN baseline."""
 import subprocess
 import time
-from pathlib import Path
-
-# Get project root (parent of benchmarks folder)
-PROJECT_ROOT = Path(__file__).parent.parent
 
 
 # Define experiment configurations
@@ -59,7 +55,6 @@ def run_training(model_config, experiment_name, extra_overrides, tags):
             check=True,
             capture_output=False,
             text=True,
-            cwd=PROJECT_ROOT,
         )
         print(f"\n✓ Training completed successfully: {experiment_name}")
         return True
