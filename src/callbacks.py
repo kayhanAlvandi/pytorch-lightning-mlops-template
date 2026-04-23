@@ -1,6 +1,6 @@
 """Custom PyTorch Lightning callbacks."""
 from pathlib import Path
-from typing import Optional
+from typing import Dict, List, Optional
 
 import torch
 from pytorch_lightning.callbacks import Callback, ModelCheckpoint
@@ -288,3 +288,108 @@ class EarlyStoppingWithWarmup(Callback):
                     f"EarlyStoppingWithWarmup: Stopping training at epoch {current_epoch}"
                 )
                 trainer.should_stop = True
+
+
+class GradualUnfreezing(Callback):
+    """Gradually unfreeze backbone stages during training.
+    
+    Unfreezes backbone stages from deep to shallow according to a schedule.
+    After unfreezing, rebuilds the optimizer with proper param groups so
+    newly unfrozen parameters get discriminative learning rates.
+    
+    Schedule format: list of [epoch, num_stages_from_end] pairs.
+    
+    Example schedule for EfficientNet-B3 (9 stages: stem, blocks.0-6, neck):
+        unfreeze_schedule:
+          - [0,  0]     # Epochs 0-4:  only head (warmup)
+          - [5,  2]     # Epochs 5-9:  unfreeze last 2 stages (neck + blocks.6)
+          - [10, 5]     # Epochs 10-19: unfreeze last 5 stages
+          - [20, -1]    # Epoch 20+:   unfreeze all (-1 = all)
+    
+    Args:
+        unfreeze_schedule: List of [epoch, num_stages_from_end] pairs.
+                          num_stages_from_end=-1 means unfreeze all stages.
+                          Must be sorted by epoch ascending.
+    """
+    
+    def __init__(self, unfreeze_schedule: List[List[int]]):
+        super().__init__()
+        # Sort by epoch to be safe
+        self.schedule = sorted(unfreeze_schedule, key=lambda x: x[0])
+        self._last_applied_idx = -1
+    
+    def on_train_epoch_start(self, trainer, pl_module) -> None:
+        current_epoch = trainer.current_epoch
+        
+        # Find the latest schedule entry that should be active
+        active_idx = -1
+        for i, (epoch, _) in enumerate(self.schedule):
+            if current_epoch >= epoch:
+                active_idx = i
+        
+        # Skip if no change from last applied
+        if active_idx == self._last_applied_idx or active_idx < 0:
+            return
+        
+        self._last_applied_idx = active_idx
+        _, num_stages = self.schedule[active_idx]
+        
+        # Get the backbone model
+        if not hasattr(pl_module, 'model') or not hasattr(pl_module.model, 'unfreeze_from_stage'):
+            rank_zero_info("GradualUnfreezing: Model does not support stage-based unfreezing, skipping")
+            return
+        
+        backbone = pl_module.model
+        
+        if num_stages == 0:
+            # Freeze all backbone (warmup phase - only head trains)
+            backbone.freeze_all_backbone()
+            rank_zero_info(f"GradualUnfreezing: Epoch {current_epoch} - backbone frozen (head warmup)")
+        elif num_stages == -1:
+            # Unfreeze everything
+            for param in backbone.backbone.parameters():
+                param.requires_grad = True
+            rank_zero_info(f"GradualUnfreezing: Epoch {current_epoch} - all backbone stages unfrozen")
+        else:
+            # Freeze all first, then unfreeze last N stages
+            backbone.freeze_all_backbone()
+            n_stages = backbone.get_num_stages()
+            start_idx = max(0, n_stages - num_stages)
+            backbone.unfreeze_from_stage(start_idx)
+            rank_zero_info(
+                f"GradualUnfreezing: Epoch {current_epoch} - unfroze last {num_stages} of {n_stages} stages"
+            )
+        
+        # Rebuild optimizer with updated param groups
+        self._rebuild_optimizer(trainer, pl_module)
+        
+        # Log trainable param count
+        trainable = backbone.get_trainable_params()
+        total = backbone.get_total_params()
+        rank_zero_info(f"  Trainable params: {trainable:,} / {total:,} ({100*trainable/total:.1f}%)")
+    
+    def _rebuild_optimizer(self, trainer, pl_module):
+        """Rebuild optimizer with updated param groups, preserving scheduler state.
+        
+        Instead of using setup_optimizers() (which resets the scheduler),
+        we create a new optimizer and patch it into the existing scheduler
+        so the LR schedule continues without jumping back up.
+        """
+        # Save old scheduler state before rebuild
+        old_scheduler_states = []
+        if trainer.lr_scheduler_configs:
+            for config in trainer.lr_scheduler_configs:
+                old_scheduler_states.append(config.scheduler.state_dict())
+        
+        # Rebuild optimizer + scheduler from configure_optimizers
+        trainer.strategy.setup_optimizers(trainer)
+        
+        # Restore scheduler state so LR continues from where it was
+        if old_scheduler_states and trainer.lr_scheduler_configs:
+            for config, old_state in zip(trainer.lr_scheduler_configs, old_scheduler_states):
+                config.scheduler.load_state_dict(old_state)
+                # Point scheduler to the new optimizer
+                config.scheduler.optimizer = trainer.optimizers[0]
+            rank_zero_info("  Optimizer rebuilt with updated param groups (scheduler state preserved)")
+        else:
+            rank_zero_info("  Optimizer rebuilt with updated param groups")

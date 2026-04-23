@@ -1,0 +1,12 @@
+optimizer:
+  _target_: torch.optim.AdamW
+  _partial_: true
+  lr: 0.001
+  weight_decay: 0.0001
+
+scheduler:
+  _target_: torch.optim.lr_scheduler.LinearLR
+  _partial_: true
+  start_factor: 1.0
+  end_factor: 0.01    # Decays to 1% of initial LR
+  total_iters: -1      # Auto-resolved from trainer.max_epochs

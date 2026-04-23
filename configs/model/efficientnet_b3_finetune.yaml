@@ -1,0 +1,11 @@
+_target_: src.model.TransferLearningClassifier
+backbone_name: efficientnet_b3
+pretrained: true
+freeze_backbone: true
+freeze_bn: true
+dropout: 0.3
+
+# Discriminative learning rates
+head_lr: 0.0001
+backbone_lr: 0.00001
+lr_decay_factor: 0.8

@@ -93,14 +93,21 @@ class TransferLearningBackbone(nn.Module):
     """Transfer learning backbone using timm pretrained models.
     
     Supports ResNet, EfficientNet, and Vision Transformer (ViT) architectures
-    with options for freezing the backbone for feature extraction.
+    with stage-aware freezing/unfreezing, BatchNorm freezing, and
+    discriminative learning rates.
+    
+    Stage layout (auto-detected from backbone):
+        - Stage 0: stem (first conv + BN)
+        - Stage 1..N: backbone blocks/layers
+        - Head: custom classifier (always trainable)
     
     Args:
-        backbone_name: Name of the backbone model (e.g., 'resnet50', 'efficientnet_b0', 'vit_base_patch16_224')
+        backbone_name: Name of the backbone model
         in_channels: Number of input channels (will adapt first conv if != 3)
         num_classes: Number of output classes
         pretrained: Whether to use pretrained weights
-        freeze_backbone: Whether to freeze backbone weights (feature extraction mode)
+        freeze_backbone: Whether to freeze backbone weights initially
+        freeze_bn: Whether to keep BatchNorm layers in eval mode (preserves pretrained stats)
         dropout: Dropout rate for classifier head
     """
     
@@ -131,12 +138,14 @@ class TransferLearningBackbone(nn.Module):
         num_classes: int,
         pretrained: bool = True,
         freeze_backbone: bool = False,
+        freeze_bn: bool = False,
         dropout: float = 0.5,
     ):
         super().__init__()
         
         self.backbone_name = backbone_name
-        self.freeze_backbone = freeze_backbone
+        self.freeze_backbone_flag = freeze_backbone
+        self.freeze_bn = freeze_bn
         
         # Get timm model name
         timm_name = self.MODEL_MAPPING.get(backbone_name, backbone_name)
@@ -152,6 +161,9 @@ class TransferLearningBackbone(nn.Module):
         # Get feature dimension from backbone
         self.feature_dim = self.backbone.num_features
         
+        # Discover stage structure from backbone
+        self._stage_names, self._stage_params = self._discover_stages()
+        
         # Create custom classifier head
         self.classifier = nn.Sequential(
             nn.Dropout(dropout),
@@ -160,32 +172,166 @@ class TransferLearningBackbone(nn.Module):
         
         # Freeze backbone if requested
         if freeze_backbone:
-            self._freeze_backbone()
+            self.freeze_all_backbone()
     
-    def _freeze_backbone(self):
+    def _discover_stages(self) -> tuple:
+        """Auto-discover backbone stages from model structure.
+        
+        Groups parameters into stages:
+          - EfficientNet: conv_stem/bn1 (stem), blocks.0..blocks.N (stages), conv_head/bn2 (neck)
+          - ResNet: conv1/bn1 (stem), layer1..layer4 (stages)
+          - ViT: patch_embed/cls_token/pos_embed (stem), blocks.0..blocks.N (stages), norm (neck)
+        
+        Returns:
+            Tuple of (stage_names, stage_params) where stage_params maps
+            stage_name -> list of (param_name, param) tuples.
+        """
+        stage_params = {}
+        
+        for name, param in self.backbone.named_parameters():
+            # Determine stage from parameter name
+            parts = name.split(".")
+            
+            # EfficientNet: blocks.0.*, blocks.1.*, etc.
+            # ResNet: layer1.*, layer2.*, etc.
+            # ViT: blocks.0.*, blocks.1.*, etc.
+            if parts[0] == "blocks" and len(parts) > 1 and parts[1].isdigit():
+                stage = f"blocks.{parts[1]}"
+            elif parts[0].startswith("layer") and parts[0][5:].isdigit():
+                stage = parts[0]  # ResNet layer1, layer2, etc.
+            elif parts[0] in ("conv_stem", "bn1", "conv1", "bn1", 
+                              "patch_embed", "cls_token", "pos_embed",
+                              "pos_drop"):
+                stage = "stem"
+            elif parts[0] in ("conv_head", "bn2", "norm", "fc_norm",
+                              "norm_pre"):
+                stage = "neck"
+            else:
+                stage = "stem"
+            
+            if stage not in stage_params:
+                stage_params[stage] = []
+            stage_params[stage].append((name, param))
+        
+        # Order: stem first, then numbered stages, then neck
+        ordered_names = []
+        if "stem" in stage_params:
+            ordered_names.append("stem")
+        
+        # Sort numbered stages (blocks.0, blocks.1, ... or layer1, layer2, ...)
+        numbered = [s for s in stage_params if s not in ("stem", "neck")]
+        numbered.sort(key=lambda s: int(s.split(".")[-1]) if "." in s 
+                      else int(s.replace("layer", "")))
+        ordered_names.extend(numbered)
+        
+        if "neck" in stage_params:
+            ordered_names.append("neck")
+        
+        return ordered_names, stage_params
+    
+    def get_stage_names(self) -> List[str]:
+        """Return ordered list of backbone stage names (stem -> deep -> neck)."""
+        return list(self._stage_names)
+    
+    def get_num_stages(self) -> int:
+        """Return number of backbone stages."""
+        return len(self._stage_names)
+    
+    def freeze_all_backbone(self):
         """Freeze all backbone parameters."""
         for param in self.backbone.parameters():
             param.requires_grad = False
-        print(f"Backbone '{self.backbone_name}' frozen - only classifier head will be trained")
+        print(f"Backbone '{self.backbone_name}' frozen ({self.get_num_stages()} stages)")
     
-    def unfreeze_backbone(self, unfreeze_layers: Optional[int] = None):
-        """Unfreeze backbone parameters.
+    def unfreeze_stages(self, stage_indices: List[int]):
+        """Unfreeze specific backbone stages by index.
         
         Args:
-            unfreeze_layers: If provided, only unfreeze the last N layers.
-                           If None, unfreeze all layers.
+            stage_indices: List of stage indices to unfreeze (0=stem, -1=last stage).
+                          Negative indices are supported.
         """
-        if unfreeze_layers is None:
-            for param in self.backbone.parameters():
+        n = self.get_num_stages()
+        resolved = [i % n for i in stage_indices]
+        unfrozen_names = []
+        
+        for idx in resolved:
+            stage_name = self._stage_names[idx]
+            unfrozen_names.append(stage_name)
+            for _, param in self._stage_params[stage_name]:
                 param.requires_grad = True
-            print(f"Backbone '{self.backbone_name}' fully unfrozen")
-        else:
-            # Get all named parameters as a list
-            params = list(self.backbone.named_parameters())
-            # Unfreeze last N layers
-            for name, param in params[-unfreeze_layers:]:
-                param.requires_grad = True
-            print(f"Unfroze last {unfreeze_layers} layers of backbone '{self.backbone_name}'")
+        
+        print(f"Unfroze stages: {unfrozen_names}")
+    
+    def unfreeze_from_stage(self, stage_idx: int):
+        """Unfreeze from a given stage index to the end (deep layers first).
+        
+        E.g., unfreeze_from_stage(-3) unfreezes the last 3 stages + neck.
+        
+        Args:
+            stage_idx: Stage index to start unfreezing from.
+                      Negative indices count from the end.
+        """
+        n = self.get_num_stages()
+        resolved = stage_idx % n
+        stages_to_unfreeze = list(range(resolved, n))
+        self.unfreeze_stages(stages_to_unfreeze)
+    
+    def get_param_groups(self, head_lr: float, backbone_lr: float,
+                         lr_decay_factor: float = 1.0) -> List[dict]:
+        """Create parameter groups with discriminative learning rates.
+        
+        LR decreases from deep layers to early layers using lr_decay_factor.
+        If lr_decay_factor=1.0, all backbone stages share the same backbone_lr.
+        
+        Example with 8 stages, backbone_lr=1e-4, lr_decay_factor=0.8:
+            neck:     1e-4
+            blocks.6: 1e-4 * 0.8^1 = 8e-5
+            blocks.5: 1e-4 * 0.8^2 = 6.4e-5
+            ...
+            stem:     1e-4 * 0.8^8 = ~1.7e-5
+            head:     head_lr (always separate)
+        
+        Args:
+            head_lr: Learning rate for the classifier head
+            backbone_lr: Base learning rate for backbone (applied to deepest stages)
+            lr_decay_factor: Multiplier applied per stage going from deep to shallow.
+                            1.0 = uniform backbone LR, <1.0 = lower LR for early layers.
+        
+        Returns:
+            List of param group dicts for the optimizer.
+        """
+        param_groups = []
+        
+        # Backbone stages: reversed so deepest stages get highest LR
+        reversed_stages = list(reversed(self._stage_names))
+        for depth, stage_name in enumerate(reversed_stages):
+            trainable = [(n, p) for n, p in self._stage_params[stage_name] 
+                        if p.requires_grad]
+            if trainable:
+                stage_lr = backbone_lr * (lr_decay_factor ** depth)
+                param_groups.append({
+                    "params": [p for _, p in trainable],
+                    "lr": stage_lr,
+                    "name": f"backbone_{stage_name}",
+                })
+        
+        # Classifier head
+        param_groups.append({
+            "params": list(self.classifier.parameters()),
+            "lr": head_lr,
+            "name": "head",
+        })
+        
+        return param_groups
+    
+    def train(self, mode: bool = True):
+        """Override train() to optionally keep BN layers in eval mode."""
+        super().train(mode)
+        if mode and self.freeze_bn:
+            for module in self.backbone.modules():
+                if isinstance(module, (nn.BatchNorm1d, nn.BatchNorm2d, nn.SyncBatchNorm)):
+                    module.eval()
+        return self
     
     def get_trainable_params(self) -> int:
         """Return count of trainable parameters."""
@@ -614,15 +760,44 @@ class BaseClassifier(pl.LightningModule):
         
         self._test_class_images = {}
     
+    def _create_scheduler(self, optimizer):
+        """Create scheduler from partial, auto-resolving T_max/total_iters from trainer.
+        
+        If the scheduler partial has T_max or total_iters set to a placeholder
+        or if trainer.max_epochs is available, automatically patches the value
+        so optimizer configs don't need to hardcode epoch counts.
+        """
+        if self._scheduler_partial is None:
+            return None
+        
+        # Auto-resolve epoch-dependent scheduler params from trainer
+        max_epochs = getattr(self.trainer, 'max_epochs', None) if self.trainer else None
+        
+        if max_epochs is not None:
+            keywords = self._scheduler_partial.keywords
+            # CosineAnnealingLR: T_max
+            if 'T_max' in keywords:
+                self._scheduler_partial = partial(
+                    self._scheduler_partial.func,
+                    **{**keywords, 'T_max': max_epochs}
+                )
+            # LinearLR / PolynomialLR: total_iters
+            if 'total_iters' in keywords:
+                self._scheduler_partial = partial(
+                    self._scheduler_partial.func,
+                    **{**keywords, 'total_iters': max_epochs}
+                )
+        
+        return self._scheduler_partial(optimizer=optimizer)
+    
     def configure_optimizers(self):
         # Complete the partial optimizer with model parameters
         optimizer = self._optimizer_partial(params=self.parameters())
         
         # Complete the partial scheduler with optimizer, if configured
-        if self._scheduler_partial is None:
+        scheduler = self._create_scheduler(optimizer)
+        if scheduler is None:
             return optimizer
-        
-        scheduler = self._scheduler_partial(optimizer=optimizer)
         
         # ReduceLROnPlateau needs a monitor key
         lr_scheduler_config = {
@@ -687,7 +862,19 @@ class CNNClassifier(BaseClassifier):
 class TransferLearningClassifier(BaseClassifier):
     """PyTorch Lightning module for transfer learning classification.
     
-    Supports ResNet, EfficientNet, and Vision Transformer (ViT) architectures.
+    Supports ResNet, EfficientNet, and Vision Transformer (ViT) architectures
+    with fine-tuning options:
+    
+    - **Gradual unfreezing**: Controlled by GradualUnfreezing callback via unfreeze schedule
+    - **Discriminative learning rates**: Lower LR for early layers, higher for deep/head
+    - **Freeze BatchNorm**: Keep BN running stats from pretrained model
+    
+    Fine-tuning config params:
+        head_lr: Learning rate for classifier head (default: uses optimizer LR)
+        backbone_lr: Learning rate for backbone layers (default: head_lr / 10)
+        lr_decay_factor: Per-stage LR decay from deep→shallow (default: 1.0 = uniform)
+        freeze_bn: Keep BatchNorm in eval mode during training
+        freeze_backbone: Start with backbone fully frozen (for warmup phase)
     """
     
     def __init__(
@@ -703,7 +890,11 @@ class TransferLearningClassifier(BaseClassifier):
         scheduler_config: Optional[dict] = None,
         pretrained: bool = True,
         freeze_backbone: bool = False,
+        freeze_bn: bool = False,
         dropout: float = 0.5,
+        head_lr: Optional[float] = None,
+        backbone_lr: Optional[float] = None,
+        lr_decay_factor: float = 1.0,
         class_names: Optional[List[str]] = None,
     ):
         super().__init__(
@@ -721,25 +912,77 @@ class TransferLearningClassifier(BaseClassifier):
             self.criterion, self._optimizer_partial, self._scheduler_partial
         )
         
+        # Store fine-tuning LR config
+        self._head_lr = head_lr
+        self._backbone_lr = backbone_lr
+        self._lr_decay_factor = lr_decay_factor
+        
         self.model = TransferLearningBackbone(
             backbone_name=backbone_name,
             in_channels=in_channels,
             num_classes=num_classes,
             pretrained=pretrained,
             freeze_backbone=freeze_backbone,
+            freeze_bn=freeze_bn,
             dropout=dropout,
         )
         
-        # Log parameter counts
+        # Log parameter counts and stage info
         total_params = self.model.get_total_params()
         trainable_params = self.model.get_trainable_params()
         print(f"Model: {backbone_name} | Total params: {total_params:,} | Trainable: {trainable_params:,} ({100*trainable_params/total_params:.1f}%)")
+        print(f"Backbone stages: {self.model.get_stage_names()}")
+        if freeze_bn:
+            print(f"BatchNorm layers frozen in eval mode (pretrained stats preserved)")
     
-    def unfreeze_backbone(self, unfreeze_layers: Optional[int] = None):
-        """Unfreeze backbone parameters for fine-tuning.
+    def configure_optimizers(self):
+        """Create optimizer with discriminative learning rates if configured.
         
-        Args:
-            unfreeze_layers: If provided, only unfreeze the last N layers.
-                           If None, unfreeze all layers.
+        If head_lr or backbone_lr is set, creates separate param groups:
+          - Each backbone stage gets its own LR (decayed by lr_decay_factor from deep→shallow)
+          - Classifier head gets head_lr
+        Otherwise, falls back to standard single-LR optimizer from base class.
         """
-        self.model.unfreeze_backbone(unfreeze_layers)
+        use_discriminative_lr = (self._head_lr is not None or self._backbone_lr is not None)
+        
+        if use_discriminative_lr:
+            # Determine LRs: get base LR from optimizer partial if not explicitly set
+            base_lr = self._optimizer_partial.keywords.get("lr", 1e-3)
+            head_lr = self._head_lr if self._head_lr is not None else base_lr
+            backbone_lr = self._backbone_lr if self._backbone_lr is not None else head_lr / 10.0
+            
+            # Get param groups from backbone
+            param_groups = self.model.get_param_groups(
+                head_lr=head_lr,
+                backbone_lr=backbone_lr,
+                lr_decay_factor=self._lr_decay_factor,
+            )
+            
+            # Log LR per group
+            for pg in param_groups:
+                print(f"  Param group '{pg['name']}': lr={pg['lr']:.2e}, params={sum(p.numel() for p in pg['params']):,}")
+            
+            # Create optimizer with param groups (strip 'lr' from partial keywords
+            # since each group has its own)
+            opt_kwargs = {k: v for k, v in self._optimizer_partial.keywords.items() if k != "lr"}
+            optimizer = self._optimizer_partial.func(param_groups, **opt_kwargs)
+            
+            # Scheduler (auto-resolves T_max/total_iters from trainer)
+            scheduler = self._create_scheduler(optimizer)
+            if scheduler is None:
+                return optimizer
+            
+            lr_scheduler_config = {
+                "scheduler": scheduler,
+                "interval": "epoch",
+            }
+            if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+                lr_scheduler_config["monitor"] = "val/loss"
+            
+            return {
+                "optimizer": optimizer,
+                "lr_scheduler": lr_scheduler_config,
+            }
+        else:
+            # Standard single-LR optimizer from base class
+            return super().configure_optimizers()
