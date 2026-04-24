@@ -760,12 +760,24 @@ class BaseClassifier(pl.LightningModule):
         
         self._test_class_images = {}
     
-    def _create_scheduler(self, optimizer):
-        """Create scheduler from partial, auto-resolving T_max/total_iters from trainer.
+    def _create_scheduler(self, optimizer, last_epoch: int = -1):
+        """Create scheduler from partial, auto-resolving epoch-dependent params.
         
-        If the scheduler partial has T_max or total_iters set to a placeholder
-        or if trainer.max_epochs is available, automatically patches the value
-        so optimizer configs don't need to hardcode epoch counts.
+        Auto-resolves from trainer.max_epochs:
+          - T_max (CosineAnnealingLR)
+          - total_iters (LinearLR, PolynomialLR)
+        
+        Supports optional LR warmup via extra keyword 'warmup_fraction':
+          - warmup_fraction: fraction of total epochs for linear warmup (e.g., 0.1 = 10%)
+          - During warmup, LR ramps from ~0 to the target LR
+          - After warmup, the main scheduler takes over for the remaining epochs
+          - Uses SequentialLR to chain warmup + main scheduler
+        
+        Args:
+            optimizer: The optimizer to attach the scheduler to
+            last_epoch: Epoch to resume from (-1 = start fresh). Used when
+                       rebuilding the scheduler mid-training (e.g., after
+                       gradual unfreezing changes param groups).
         """
         if self._scheduler_partial is None:
             return None
@@ -773,29 +785,62 @@ class BaseClassifier(pl.LightningModule):
         # Auto-resolve epoch-dependent scheduler params from trainer
         max_epochs = getattr(self.trainer, 'max_epochs', None) if self.trainer else None
         
-        if max_epochs is not None:
-            keywords = self._scheduler_partial.keywords
-            # CosineAnnealingLR: T_max
-            if 'T_max' in keywords:
-                self._scheduler_partial = partial(
-                    self._scheduler_partial.func,
-                    **{**keywords, 'T_max': max_epochs}
-                )
-            # LinearLR / PolynomialLR: total_iters
-            if 'total_iters' in keywords:
-                self._scheduler_partial = partial(
-                    self._scheduler_partial.func,
-                    **{**keywords, 'total_iters': max_epochs}
-                )
+        # Extract warmup_fraction (not a real scheduler param, we handle it ourselves)
+        keywords = dict(self._scheduler_partial.keywords)
+        warmup_fraction = keywords.pop('warmup_fraction', 0.0)
         
-        return self._scheduler_partial(optimizer=optimizer)
+        if max_epochs is not None:
+            warmup_epochs = int(max_epochs * warmup_fraction)
+            remaining_epochs = max_epochs - warmup_epochs
+            
+            # CosineAnnealingLR: T_max = remaining epochs after warmup
+            if 'T_max' in keywords:
+                keywords['T_max'] = remaining_epochs
+            # LinearLR / PolynomialLR: total_iters = remaining epochs after warmup
+            if 'total_iters' in keywords:
+                keywords['total_iters'] = remaining_epochs
+        else:
+            warmup_epochs = 0
+        
+        # Create the main scheduler with last_epoch for mid-training resume
+        main_scheduler = self._scheduler_partial.func(
+            optimizer=optimizer, last_epoch=last_epoch, **keywords
+        )
+        
+        # If no warmup, return main scheduler directly
+        if warmup_epochs <= 0:
+            return main_scheduler
+        
+        # Create warmup scheduler: ramp from ~0 to target LR
+        warmup_scheduler = torch.optim.lr_scheduler.LinearLR(
+            optimizer,
+            start_factor=0.01,   # Start at 1% of target LR
+            end_factor=1.0,      # Ramp to 100% of target LR
+            total_iters=warmup_epochs,
+            last_epoch=last_epoch,
+        )
+        
+        # Chain: warmup → main
+        combined = torch.optim.lr_scheduler.SequentialLR(
+            optimizer,
+            schedulers=[warmup_scheduler, main_scheduler],
+            milestones=[warmup_epochs],
+            last_epoch=last_epoch,
+        )
+        
+        if last_epoch <= 0:
+            print(f"  LR schedule: warmup {warmup_epochs} epochs → main decay {remaining_epochs} epochs")
+        
+        return combined
     
     def configure_optimizers(self):
         # Complete the partial optimizer with model parameters
         optimizer = self._optimizer_partial(params=self.parameters())
         
         # Complete the partial scheduler with optimizer, if configured
-        scheduler = self._create_scheduler(optimizer)
+        # _scheduler_resume_epoch is set by GradualUnfreezing callback during rebuild
+        last_epoch = getattr(self, '_scheduler_resume_epoch', -1)
+        scheduler = self._create_scheduler(optimizer, last_epoch=last_epoch)
         if scheduler is None:
             return optimizer
         
@@ -968,7 +1013,8 @@ class TransferLearningClassifier(BaseClassifier):
             optimizer = self._optimizer_partial.func(param_groups, **opt_kwargs)
             
             # Scheduler (auto-resolves T_max/total_iters from trainer)
-            scheduler = self._create_scheduler(optimizer)
+            last_epoch = getattr(self, '_scheduler_resume_epoch', -1)
+            scheduler = self._create_scheduler(optimizer, last_epoch=last_epoch)
             if scheduler is None:
                 return optimizer
             

@@ -8,5 +8,6 @@ scheduler:
   _target_: torch.optim.lr_scheduler.LinearLR
   _partial_: true
   start_factor: 1.0
-  end_factor: 0.01    # Decays to 1% of initial LR
-  total_iters: -1      # Auto-resolved from trainer.max_epochs
+  end_factor: 0.01        # Decays to 1% of initial LR
+  total_iters: -1          # Auto-resolved from trainer.max_epochs
+  warmup_fraction: 0.1    # First 10% of epochs: linear warmup from ~0 to target LR

@@ -6,6 +6,6 @@ freeze_bn: true
 dropout: 0.3
 
 # Discriminative learning rates
-head_lr: 0.0001
-backbone_lr: 0.00001
+head_lr: 0.001
+backbone_lr: 0.0001
 lr_decay_factor: 0.8
