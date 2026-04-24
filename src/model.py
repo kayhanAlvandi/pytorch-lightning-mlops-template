@@ -760,7 +760,7 @@ class BaseClassifier(pl.LightningModule):
         
         self._test_class_images = {}
     
-    def _create_scheduler(self, optimizer, last_epoch: int = -1):
+    def _create_scheduler(self, optimizer):
         """Create scheduler from partial, auto-resolving epoch-dependent params.
         
         Auto-resolves from trainer.max_epochs:
@@ -772,12 +772,6 @@ class BaseClassifier(pl.LightningModule):
           - During warmup, LR ramps from ~0 to the target LR
           - After warmup, the main scheduler takes over for the remaining epochs
           - Uses SequentialLR to chain warmup + main scheduler
-        
-        Args:
-            optimizer: The optimizer to attach the scheduler to
-            last_epoch: Epoch to resume from (-1 = start fresh). Used when
-                       rebuilding the scheduler mid-training (e.g., after
-                       gradual unfreezing changes param groups).
         """
         if self._scheduler_partial is None:
             return None
@@ -802,10 +796,8 @@ class BaseClassifier(pl.LightningModule):
         else:
             warmup_epochs = 0
         
-        # Create the main scheduler with last_epoch for mid-training resume
-        main_scheduler = self._scheduler_partial.func(
-            optimizer=optimizer, last_epoch=last_epoch, **keywords
-        )
+        # Create the main scheduler
+        main_scheduler = self._scheduler_partial.func(optimizer=optimizer, **keywords)
         
         # If no warmup, return main scheduler directly
         if warmup_epochs <= 0:
@@ -817,7 +809,6 @@ class BaseClassifier(pl.LightningModule):
             start_factor=0.01,   # Start at 1% of target LR
             end_factor=1.0,      # Ramp to 100% of target LR
             total_iters=warmup_epochs,
-            last_epoch=last_epoch,
         )
         
         # Chain: warmup → main
@@ -825,11 +816,9 @@ class BaseClassifier(pl.LightningModule):
             optimizer,
             schedulers=[warmup_scheduler, main_scheduler],
             milestones=[warmup_epochs],
-            last_epoch=last_epoch,
         )
         
-        if last_epoch <= 0:
-            print(f"  LR schedule: warmup {warmup_epochs} epochs → main decay {remaining_epochs} epochs")
+        print(f"  LR schedule: warmup {warmup_epochs} epochs → main decay {remaining_epochs} epochs")
         
         return combined
     
@@ -838,9 +827,7 @@ class BaseClassifier(pl.LightningModule):
         optimizer = self._optimizer_partial(params=self.parameters())
         
         # Complete the partial scheduler with optimizer, if configured
-        # _scheduler_resume_epoch is set by GradualUnfreezing callback during rebuild
-        last_epoch = getattr(self, '_scheduler_resume_epoch', -1)
-        scheduler = self._create_scheduler(optimizer, last_epoch=last_epoch)
+        scheduler = self._create_scheduler(optimizer)
         if scheduler is None:
             return optimizer
         
@@ -1013,8 +1000,7 @@ class TransferLearningClassifier(BaseClassifier):
             optimizer = self._optimizer_partial.func(param_groups, **opt_kwargs)
             
             # Scheduler (auto-resolves T_max/total_iters from trainer)
-            last_epoch = getattr(self, '_scheduler_resume_epoch', -1)
-            scheduler = self._create_scheduler(optimizer, last_epoch=last_epoch)
+            scheduler = self._create_scheduler(optimizer)
             if scheduler is None:
                 return optimizer
             

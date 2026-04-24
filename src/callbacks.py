@@ -371,27 +371,30 @@ class GradualUnfreezing(Callback):
     def _rebuild_optimizer(self, trainer, pl_module):
         """Rebuild optimizer and scheduler with updated param groups.
         
-        Sets _scheduler_resume_epoch on the model so that _create_scheduler()
-        creates the scheduler at the correct epoch position. This avoids
-        param group count mismatches and the step()-before-optimizer warning.
+        Creates a fresh optimizer + scheduler (with correct param groups),
+        then fast-forwards the scheduler by stepping through each past epoch.
+        This is the only reliable way to get SequentialLR (warmup + cosine)
+        to the exact correct LR state, since its last_epoch constructor
+        arg doesn't work properly with chained sub-schedulers.
         """
+        import warnings
         current_epoch = trainer.current_epoch
-        
-        # Tell _create_scheduler to build at the current epoch
-        pl_module._scheduler_resume_epoch = current_epoch
         
         # Rebuild optimizer + scheduler from scratch (new param groups)
         trainer.strategy.setup_optimizers(trainer)
         
-        # Clean up
-        pl_module._scheduler_resume_epoch = -1
-        
-        # Log current LRs
+        # Fast-forward scheduler to current epoch by stepping through each past epoch
         if trainer.lr_scheduler_configs and current_epoch > 0:
+            for config in trainer.lr_scheduler_configs:
+                scheduler = config.scheduler
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", UserWarning)
+                    for _ in range(current_epoch):
+                        scheduler.step()
             current_lrs = [pg['lr'] for pg in trainer.optimizers[0].param_groups]
             lr_str = ", ".join(f"{lr:.2e}" for lr in current_lrs)
             rank_zero_info(
-                f"  Scheduler resumed at epoch {current_epoch}, "
+                f"  Scheduler fast-forwarded to epoch {current_epoch}, "
                 f"current LRs: [{lr_str}]"
             )
         
