@@ -18,6 +18,23 @@ from typing import Any, Dict, Optional, Tuple
 import yaml
 from mlflow.tracking import MlflowClient
 
+# ANSI color codes
+class Colors:
+    HEADER = "\033[95m"
+    BLUE = "\033[94m"
+    CYAN = "\033[96m"
+    GREEN = "\033[92m"
+    YELLOW = "\033[93m"
+    RED = "\033[91m"
+    BOLD = "\033[1m"
+    DIM = "\033[2m"
+    RESET = "\033[0m"
+
+
+def colored(text: str, *styles: str) -> str:
+    """Apply ANSI color codes to text."""
+    return "".join(styles) + str(text) + Colors.RESET
+
 
 def get_run_by_name(client: MlflowClient, run_name: str, experiment_name: str = "image_classifier") -> Optional[str]:
     """Find run ID by run name."""
@@ -62,61 +79,125 @@ def flatten_dict(d: Dict[str, Any], parent_key: str = "", sep: str = ".") -> Dic
     return dict(items)
 
 
-def compare_configs(cfg1: Dict[str, Any], cfg2: Dict[str, Any], name1: str, name2: str) -> Tuple[int, int, int]:
-    """Compare two configs and print differences."""
-    flat1 = flatten_dict(cfg1)
-    flat2 = flatten_dict(cfg2)
+def deep_diff(v1: Any, v2: Any, path: str = "") -> list:
+    """Recursively compare two values and return list of differences.
     
-    all_keys = set(flat1.keys()) | set(flat2.keys())
+    Returns list of tuples: (path, val1, val2) for changed values.
+    """
+    diffs = []
+    
+    if type(v1) != type(v2):
+        # Different types - report as changed
+        diffs.append((path, v1, v2))
+    elif isinstance(v1, dict) and isinstance(v2, dict):
+        # Compare dicts recursively
+        all_keys = set(v1.keys()) | set(v2.keys())
+        for k in sorted(all_keys):
+            sub_path = f"{path}.{k}" if path else k
+            if k not in v1:
+                diffs.append((sub_path, "<missing>", v2[k]))
+            elif k not in v2:
+                diffs.append((sub_path, v1[k], "<missing>"))
+            else:
+                diffs.extend(deep_diff(v1[k], v2[k], sub_path))
+    elif isinstance(v1, list) and isinstance(v2, list):
+        # Compare lists - try to match by _target_ for callback-like dicts
+        if all(isinstance(x, dict) and "_target_" in x for x in v1 + v2):
+            # Match list items by _target_ key
+            targets1 = {x.get("_target_"): x for x in v1}
+            targets2 = {x.get("_target_"): x for x in v2}
+            all_targets = set(targets1.keys()) | set(targets2.keys())
+            for target in sorted(all_targets):
+                # Use short name for path (last part of _target_)
+                short_name = target.split(".")[-1] if target else "unknown"
+                sub_path = f"{path}[{short_name}]"
+                if target not in targets1:
+                    diffs.append((sub_path, "<missing>", targets2[target]))
+                elif target not in targets2:
+                    diffs.append((sub_path, targets1[target], "<missing>"))
+                else:
+                    diffs.extend(deep_diff(targets1[target], targets2[target], sub_path))
+        else:
+            # Simple list comparison by index
+            max_len = max(len(v1), len(v2))
+            for i in range(max_len):
+                sub_path = f"{path}[{i}]"
+                if i >= len(v1):
+                    diffs.append((sub_path, "<missing>", v2[i]))
+                elif i >= len(v2):
+                    diffs.append((sub_path, v1[i], "<missing>"))
+                elif v1[i] != v2[i]:
+                    if isinstance(v1[i], (dict, list)) and isinstance(v2[i], (dict, list)):
+                        diffs.extend(deep_diff(v1[i], v2[i], sub_path))
+                    else:
+                        diffs.append((sub_path, v1[i], v2[i]))
+    elif v1 != v2:
+        diffs.append((path, v1, v2))
+    
+    return diffs
+
+
+def compare_configs(cfg1: Dict[str, Any], cfg2: Dict[str, Any], name1: str, name2: str) -> Tuple[int, int, int]:
+    """Compare two configs and print differences using deep recursive comparison."""
+    # Use deep_diff for recursive comparison
+    all_diffs = deep_diff(cfg1, cfg2)
     
     added = []      # In run2 but not run1
     removed = []    # In run1 but not run2
     changed = []    # Different values
     
-    for key in sorted(all_keys):
-        v1 = flat1.get(key)
-        v2 = flat2.get(key)
-        
-        if v1 is None and v2 is not None:
-            added.append((key, v2))
-        elif v1 is not None and v2 is None:
-            removed.append((key, v1))
-        elif v1 != v2:
-            changed.append((key, v1, v2))
+    for path, v1, v2 in all_diffs:
+        if v1 == "<missing>":
+            added.append((path, v2))
+        elif v2 == "<missing>":
+            removed.append((path, v1))
+        else:
+            changed.append((path, v1, v2))
     
     # Print results (flush to clear any progress bar artifacts)
     sys.stdout.flush()
     print("\n" * 2)  # Clear space after progress bars
-    print("=" * 70)
-    print(f"Config Comparison: {name1} vs {name2}")
-    print("=" * 70)
+    
+    # Header
+    print(colored("═" * 70, Colors.BOLD, Colors.CYAN))
+    print(colored("  CONFIG COMPARISON", Colors.BOLD, Colors.CYAN))
+    print(colored(f"  {name1}", Colors.BLUE) + colored(" vs ", Colors.DIM) + colored(name2, Colors.HEADER))
+    print(colored("═" * 70, Colors.BOLD, Colors.CYAN))
     
     if not added and not removed and not changed:
-        print("\n✓ Configs are identical!")
+        print(colored("\n  ✓ Configs are identical!", Colors.GREEN, Colors.BOLD))
         return 0, 0, 0
     
     if changed:
-        print(f"\n[CHANGED] ({len(changed)} parameters)")
-        print("-" * 40)
+        print(colored(f"\n  ⚡ CHANGED ({len(changed)})", Colors.YELLOW, Colors.BOLD))
+        print(colored("  " + "─" * 50, Colors.DIM))
         for key, v1, v2 in changed:
-            print(f"  {key}:")
-            print(f"    {name1}: {v1}")
-            print(f"    {name2}: {v2}")
+            print(colored(f"    {key}", Colors.BOLD))
+            print(colored(f"      ◀ ", Colors.RED) + colored(f"{name1}: ", Colors.DIM) + str(v1))
+            print(colored(f"      ▶ ", Colors.GREEN) + colored(f"{name2}: ", Colors.DIM) + str(v2))
     
     if added:
-        print(f"\n[ADDED in {name2}] ({len(added)} parameters)")
-        print("-" * 40)
+        print(colored(f"\n  ✚ ADDED in {name2} ({len(added)})", Colors.GREEN, Colors.BOLD))
+        print(colored("  " + "─" * 50, Colors.DIM))
         for key, v in added:
-            print(f"  {key}: {v}")
+            print(colored(f"    {key}: ", Colors.BOLD) + colored(str(v), Colors.GREEN))
     
     if removed:
-        print(f"\n[REMOVED in {name2}] ({len(removed)} parameters)")
-        print("-" * 40)
+        print(colored(f"\n  ✖ REMOVED in {name2} ({len(removed)})", Colors.RED, Colors.BOLD))
+        print(colored("  " + "─" * 50, Colors.DIM))
         for key, v in removed:
-            print(f"  {key}: {v}")
+            print(colored(f"    {key}: ", Colors.BOLD) + colored(str(v), Colors.RED))
     
-    print("\n" + "=" * 70)
-    print(f"Summary: {len(changed)} changed, {len(added)} added, {len(removed)} removed")
+    # Summary
+    print(colored("\n" + "═" * 70, Colors.BOLD, Colors.CYAN))
+    summary_parts = []
+    if changed:
+        summary_parts.append(colored(f"{len(changed)} changed", Colors.YELLOW))
+    if added:
+        summary_parts.append(colored(f"{len(added)} added", Colors.GREEN))
+    if removed:
+        summary_parts.append(colored(f"{len(removed)} removed", Colors.RED))
+    print(colored("  Summary: ", Colors.BOLD) + ", ".join(summary_parts))
     
     return len(changed), len(added), len(removed)
 
