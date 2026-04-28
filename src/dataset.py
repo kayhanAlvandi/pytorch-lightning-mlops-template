@@ -181,9 +181,13 @@ class MultiChannelImageDataset(Dataset):
             file_path = sample["channel_files"][ch]
             img = self._load_image(file_path)
             
-            # Normalize to [0, 1]
-            if img.max() > 0:
-                img = img / img.max()
+            # Percentile-clip to [0, 1]: robust to outliers (hot/dead pixels)
+            p_lo, p_hi = np.percentile(img, [1, 99.5])
+            if p_hi - p_lo > 0:
+                img = np.clip(img, p_lo, p_hi)
+                img = ((img - p_lo) / (p_hi - p_lo)).astype(np.float32)
+            else:
+                img = np.zeros_like(img)
             
             channel_images.append(img)
         
@@ -434,9 +438,13 @@ class TiledMultiChannelDataset(Dataset):
             file_path = sample["channel_files"][ch]
             img = self._load_single_image(file_path)
             
-            # Normalize to [0, 1]
-            if img.max() > 0:
-                img = img / img.max()
+            # Percentile-clip to [0, 1]: robust to outliers (hot/dead pixels)
+            p_lo, p_hi = np.percentile(img, [1, 99.5])
+            if p_hi - p_lo > 0:
+                img = np.clip(img, p_lo, p_hi)
+                img = ((img - p_lo) / (p_hi - p_lo)).astype(np.float32)
+            else:
+                img = np.zeros_like(img)
             
             channel_images.append(img)
         

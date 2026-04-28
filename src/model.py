@@ -399,6 +399,9 @@ class BaseClassifier(pl.LightningModule):
         # Gradient monitoring
         self.grad_alert_threshold = 1e5
         self._last_batch_meta: Dict[str, Any] = {}
+        
+        # Batch-level transform (Mixup/CutMix) — set externally by train.py
+        self.batch_transform: Optional[nn.Module] = None
     
     @staticmethod
     def _import_class(dotpath: str):
@@ -485,8 +488,19 @@ class BaseClassifier(pl.LightningModule):
     
     def training_step(self, batch, batch_idx) -> torch.Tensor:
         images, labels = batch
-        logits = self(images)
-        loss = self.criterion(logits, labels)
+        
+        # Apply batch-level transform (Mixup/CutMix) if configured
+        # Uses torchvision.transforms.v2 — returns (images, soft_labels)
+        if self.batch_transform is not None and self.training:
+            images, soft_labels = self.batch_transform(images, labels)
+            logits = self(images)
+            # Soft labels (B, num_classes): use soft cross-entropy
+            soft_labels = soft_labels.to(dtype=logits.dtype, device=logits.device)
+            log_probs = torch.nn.functional.log_softmax(logits, dim=1)
+            loss = -(soft_labels * log_probs).sum(dim=1).mean()
+        else:
+            logits = self(images)
+            loss = self.criterion(logits, labels)
         
         preds = torch.argmax(logits, dim=1)
         self.train_acc(preds, labels)
@@ -811,14 +825,14 @@ class BaseClassifier(pl.LightningModule):
             total_iters=warmup_epochs,
         )
         
-        # Chain: warmup → main
+        # Chain: warmup -> main
         combined = torch.optim.lr_scheduler.SequentialLR(
             optimizer,
             schedulers=[warmup_scheduler, main_scheduler],
             milestones=[warmup_epochs],
         )
         
-        print(f"  LR schedule: warmup {warmup_epochs} epochs → main decay {remaining_epochs} epochs")
+        print(f"  LR schedule: warmup {warmup_epochs} epochs -> main decay {remaining_epochs} epochs")
         
         return combined
     
@@ -904,7 +918,7 @@ class TransferLearningClassifier(BaseClassifier):
     Fine-tuning config params:
         head_lr: Learning rate for classifier head (default: uses optimizer LR)
         backbone_lr: Learning rate for backbone layers (default: head_lr / 10)
-        lr_decay_factor: Per-stage LR decay from deep→shallow (default: 1.0 = uniform)
+        lr_decay_factor: Per-stage LR decay from deep->shallow (default: 1.0 = uniform)
         freeze_bn: Keep BatchNorm in eval mode during training
         freeze_backbone: Start with backbone fully frozen (for warmup phase)
     """
@@ -971,7 +985,7 @@ class TransferLearningClassifier(BaseClassifier):
         """Create optimizer with discriminative learning rates if configured.
         
         If head_lr or backbone_lr is set, creates separate param groups:
-          - Each backbone stage gets its own LR (decayed by lr_decay_factor from deep→shallow)
+          - Each backbone stage gets its own LR (decayed by lr_decay_factor from deep->shallow)
           - Classifier head gets head_lr
         Otherwise, falls back to standard single-LR optimizer from base class.
         """

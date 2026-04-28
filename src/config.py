@@ -26,29 +26,10 @@ class RandomCropDatasetConfig:
     crop_size: int = 224
 
 
-# ── Transform configs (nested inside datamodule) ─────────────────────────
-@dataclass
-class TileTrainTransformConfig:
-    _target_: str = "src.transforms.get_tile_train_transforms"
-
-
-@dataclass
-class TileValTransformConfig:
-    _target_: str = "src.transforms.get_tile_val_transforms"
-
-
-@dataclass
-class CropTrainTransformConfig:
-    _target_: str = "src.transforms.get_train_transforms"
-    crop_size: int = 224
-    num_channels: int = 5
-
-
-@dataclass
-class CropValTransformConfig:
-    _target_: str = "src.transforms.get_val_transforms"
-    crop_size: int = 224
-    num_channels: int = 5
+# ── Transform configs ─────────────────────────────────────────────────────
+# Transforms are now configured as lists in YAML (see datamodule configs).
+# Each entry: {name: TransformClass, param1: val1, ...}
+# No structured config needed — plain lists work with OmegaConf.
 
 
 # ── Datamodule (dataloader-level config + nested dataset + transforms) ────
@@ -56,8 +37,9 @@ class CropValTransformConfig:
 class DataModuleConfig:
     _target_: str = "src.datamodule.MultiChannelDataModule"
     dataset: Any = field(default_factory=TiledDatasetConfig)
-    train_transform: Any = field(default_factory=TileTrainTransformConfig)
-    val_transform: Any = field(default_factory=TileValTransformConfig)
+    train_transform: Any = field(default_factory=list)   # List of {name: ..., params}
+    val_transform: Any = field(default_factory=list)      # List of {name: ..., params}
+    batch_transform: Optional[Any] = None                 # Batch-level (Mixup/CutMix)
     batch_size: int = 16
     num_workers: int = 4
     pin_memory: bool = True

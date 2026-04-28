@@ -141,6 +141,11 @@ def main(cfg: DictConfig):
         _convert_="all",
     )
     
+    # Pass batch-level transform (Mixup/CutMix) from datamodule to model
+    if datamodule.batch_transform is not None:
+        model.batch_transform = datamodule.batch_transform
+        print(f"Batch transform: {datamodule.batch_transform.__class__.__name__}")
+    
     # Setup callbacks — instantiate every entry in the callbacks list from config
     callbacks = [instantiate(cb_cfg) for cb_cfg in cfg.callbacks]
     

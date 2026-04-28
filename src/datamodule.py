@@ -3,11 +3,12 @@ from typing import Dict, List, Optional, Tuple
 
 import pytorch_lightning as pl
 from hydra.utils import get_class, instantiate
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig, ListConfig, OmegaConf
 from torch.utils.data import DataLoader
 from sklearn.model_selection import train_test_split
 
 from .dataset import DummyLabelsProvider, MongoDBLabelsProvider, LabelEncoder
+from .transforms import build_transforms, build_batch_transform
 
 
 class MultiChannelDataModule(pl.LightningDataModule):
@@ -26,6 +27,7 @@ class MultiChannelDataModule(pl.LightningDataModule):
         dataset: DictConfig,
         train_transform: DictConfig,
         val_transform: DictConfig,
+        batch_transform: Optional[DictConfig] = None,
         batch_size: int = 16,
         num_workers: int = 4,
         pin_memory: bool = True,
@@ -37,8 +39,11 @@ class MultiChannelDataModule(pl.LightningDataModule):
         """
         Args:
             dataset: Hydra config for the dataset (contains _target_ and dataset params).
-            train_transform: Hydra config for training transforms (contains _target_).
-            val_transform: Hydra config for validation transforms (contains _target_).
+            train_transform: List of transform dicts with "name" + params, or legacy
+                            dict with _target_ pointing to a factory function.
+            val_transform: Same format as train_transform.
+            batch_transform: Optional batch-level transform config (Mixup/CutMix).
+                            Dict with "name" + params. Applied in training_step.
             batch_size: Batch size for data loaders.
             num_workers: Number of workers for data loading.
             pin_memory: Whether to pin memory for faster GPU transfer.
@@ -56,11 +61,12 @@ class MultiChannelDataModule(pl.LightningDataModule):
             raw = OmegaConf.to_container(exclude_wells) if hasattr(exclude_wells, '_metadata') else exclude_wells
             exclude_wells = [tuple(w) for w in raw]
         
-        self.save_hyperparameters(ignore=["dataset", "train_transform", "val_transform"])
+        self.save_hyperparameters(ignore=["dataset", "train_transform", "val_transform", "batch_transform"])
         
         self.dataset_cfg = dataset
         self.train_transform_cfg = train_transform
         self.val_transform_cfg = val_transform
+        self.batch_transform_cfg = batch_transform
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.pin_memory = pin_memory
@@ -73,6 +79,11 @@ class MultiChannelDataModule(pl.LightningDataModule):
         self.root_dir = dataset.root_dir
         self.channels = list(dataset.channels)
         self.crop_size = dataset.crop_size
+        
+        # Build batch-level transform (Mixup/CutMix) — exposed for model to use
+        self.batch_transform = build_batch_transform(
+            OmegaConf.to_container(batch_transform, resolve=True) if batch_transform is not None else None
+        )
         
         self.train_dataset = None
         self.val_dataset = None
@@ -130,9 +141,9 @@ class MultiChannelDataModule(pl.LightningDataModule):
         train_labels = {w: labels_dict[w] for w in train_wells}
         val_labels = {w: labels_dict[w] for w in val_wells}
         
-        # Instantiate transforms from config _target_
-        train_transform = instantiate(self.train_transform_cfg)
-        val_transform = instantiate(self.val_transform_cfg)
+        # Build transforms: list-based (new) or _target_-based (legacy)
+        train_transform = self._build_transform(self.train_transform_cfg)
+        val_transform = self._build_transform(self.val_transform_cfg)
         
         # Instantiate datasets: use get_class() + direct constructor call because
         # labels_dict has tuple keys and label_encoder is a runtime object,
@@ -226,3 +237,21 @@ class MultiChannelDataModule(pl.LightningDataModule):
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
         )
+    
+    @staticmethod
+    def _build_transform(cfg):
+        """Build transforms from config.
+        
+        Supports two formats:
+          1. List of dicts (new): [{name: RandomHorizontalFlip, p: 0.5}, ...]
+             -> uses build_transforms() registry-based builder
+          2. Dict with _target_ (legacy): {_target_: src.transforms.get_train_transforms, ...}
+             -> uses hydra.utils.instantiate()
+        """
+        if isinstance(cfg, (list, ListConfig)):
+            # New list-based format
+            return build_transforms(OmegaConf.to_container(cfg, resolve=True)
+                                    if isinstance(cfg, ListConfig) else cfg)
+        else:
+            # Legacy _target_ format
+            return instantiate(cfg)
