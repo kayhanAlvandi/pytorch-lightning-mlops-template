@@ -5,24 +5,52 @@ num_workers: 0
 pin_memory: true
 use_mongodb: true
 train_val_split: 0.5
-max_wells_per_label: 2
+max_wells_per_label: 4
 exclude_wells:
   - ["MIG-Exp03-CP-40X-bin1X1", "K07"]
   - ["MIG-Exp03-CP-40X-bin1X1", "K08"]
   - ["MIG-Exp03-CP-40X-bin1X1", "K09"]
+  - ["MIG-Exp03-CP-40X-bin1X1", "K10"]
+  - ["MIG-Exp03-CP-40X-bin1X1", "K11"]
+  
 
 dataset:
   _target_: src.dataset.TiledMultiChannelDataset
   root_dir: "O:\\BTSData\\MeasurementData\\MIG\\MIG-Exp03-CP-40X-bin1X1_20230831_143904\\MIG-Exp03-CP-40X-bin1X1"
   channels: [1, 2, 3, 4, 5]
-  crop_size: 224
+  crop_size: 280
   stride: null
   cache_size: 32
-  max_samples_per_label: 4
+  max_samples_per_label: 9
   verbose: true
 
 train_transform:
-  _target_: src.transforms.get_tile_train_transforms
+  - name: RandomCrop
+    size: 224
+  - name: GaussianNoise
+    std: 0.05
+    p: 0.5
+  - name: GaussianBlur
+    min_kernel: 3
+    max_kernel: 7
+    sigma: 1.0
+    p: 0.3
+  - name: RandomErasing
+    p: 0.3
+    scale: [0.02, 0.2]
+    ratio: [0.3, 3.3]
+    value: zero
+  - name: Normalize
 
 val_transform:
-  _target_: src.transforms.get_tile_val_transforms
+  - name: CenterCrop
+    size: 224
+  - name: Normalize
+
+# Optional batch-level transform (Mixup/CutMix)
+# v2.RandomChoice picks CutMix or MixUp with equal probability each batch
+batch_transform:
+  name: BatchMixCut
+  mixup_alpha: 0.2
+  cutmix_alpha: 0.4
+  num_classes: 4

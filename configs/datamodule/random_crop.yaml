@@ -18,11 +18,21 @@ dataset:
   crop_size: 224
 
 train_transform:
-  _target_: src.transforms.get_train_transforms
-  crop_size: ${datamodule.dataset.crop_size}
-  num_channels: 5
+  - name: RandomCrop
+    size: ${datamodule.dataset.crop_size}
+  - name: GaussianBlur
+    min_kernel: 3
+    max_kernel: 7
+    sigma: 1.0
+    p: 0.3
+  - name: RandomErasing
+    p: 0.3
+    scale: [0.02, 0.2]
+    ratio: [0.3, 3.3]
+    value: zero
+  - name: Normalize
 
 val_transform:
-  _target_: src.transforms.get_val_transforms
-  crop_size: ${datamodule.dataset.crop_size}
-  num_channels: 5
+  - name: CenterCrop
+    size: ${datamodule.dataset.crop_size}
+  - name: Normalize
