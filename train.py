@@ -241,7 +241,7 @@ def main(cfg: DictConfig):
             dataset = mlflow.data.from_pandas(
                 dataset_summary,
                 source=cfg.datamodule.dataset.root_dir,
-                name=f"microscopy_dataset_{dataset_metadata['dataset_version']}",
+                name=f"{cfg.dataset_name or 'microscopy_dataset'}_{dataset_metadata['dataset_version']}",
             )
             mlflow.log_input(dataset, context="training")
             print(f"✓ Dataset tracked with version: {dataset_metadata['dataset_version']}")

@@ -135,4 +135,5 @@ class Config:
     ckpt: Optional[str] = None
     resume_from_model: Optional[str] = None
     run_name: Optional[str] = None
+    dataset_name: Optional[str] = None
     tags: Optional[List[str]] = None
