@@ -290,12 +290,184 @@ class EarlyStoppingWithWarmup(Callback):
                 trainer.should_stop = True
 
 
-class GradualUnfreezing(Callback):
-    """Gradually unfreeze backbone stages during training.
+class AutoGradualUnfreezing(Callback):
+    """Automatically unfreeze backbone stages when a metric plateaus.
     
-    Unfreezes backbone stages from deep to shallow according to a schedule.
+    Monitors a validation metric and unfreezes the next stage when 
+    improvement stalls. This avoids guessing epoch-based schedules.
+    
+    Algorithm:
+      1. Start at unfreeze_stages[0] (typically 0 = head only)
+      2. After each epoch, check if the metric improved by at least `min_delta`
+      3. If no improvement for `patience` consecutive epochs, advance to the
+         next entry in unfreeze_stages
+      4. Reset patience counter after each unfreeze event
+      5. Stop unfreezing when all stages in the list have been activated
+    
+    Args:
+        unfreeze_stages: List of num_stages_from_end values, e.g. [0, 2, 4, 5, -1].
+                         0 = head only, -1 = all stages.
+        monitor: Metric to monitor, e.g. "val/loss" or "val/acc".
+        patience: Number of epochs without improvement before unfreezing next stage.
+        min_delta: Minimum improvement to count as progress.
+        mode: "min" for loss-like metrics, "max" for accuracy-like metrics.
+        min_epochs_per_stage: Minimum epochs to stay at each stage regardless of metric.
+    
+    Example YAML:
+        - _target_: src.callbacks.AutoGradualUnfreezing
+          unfreeze_stages: [0, 2, 4, 5, -1]
+          monitor: val/loss
+          patience: 5
+          min_delta: 0.001
+          mode: min
+          min_epochs_per_stage: 3
+    """
+    
+    def __init__(
+        self,
+        unfreeze_stages: List[int],
+        monitor: str = "val/loss",
+        patience: int = 5,
+        min_delta: float = 0.001,
+        mode: str = "min",
+        min_epochs_per_stage: int = 3,
+    ):
+        super().__init__()
+        self.unfreeze_stages = unfreeze_stages
+        self.monitor = monitor
+        self.patience = patience
+        self.min_delta = min_delta
+        self.mode = mode
+        self.min_epochs_per_stage = min_epochs_per_stage
+        
+        # State tracking
+        self._current_stage_idx = 0
+        self._best_score = None
+        self._wait_count = 0
+        self._epochs_at_stage = 0
+        
+        if mode == "min":
+            self._is_better = lambda current, best: current < best - min_delta
+        else:
+            self._is_better = lambda current, best: current > best + min_delta
+    
+    def on_train_epoch_start(self, trainer, pl_module) -> None:
+        # Apply initial stage at epoch 0
+        if trainer.current_epoch == 0:
+            self._apply_stage(trainer, pl_module, self._current_stage_idx)
+    
+    def on_validation_epoch_end(self, trainer, pl_module) -> None:
+        # Skip sanity check
+        if trainer.sanity_checking:
+            return
+        
+        # Get current metric value
+        logs = trainer.callback_metrics
+        if self.monitor not in logs:
+            return
+        
+        current = logs[self.monitor].item()
+        self._epochs_at_stage += 1
+        
+        # Check if metric improved
+        if self._best_score is None or self._is_better(current, self._best_score):
+            self._best_score = current
+            self._wait_count = 0
+        else:
+            self._wait_count += 1
+        
+        # Log current state (use print — rank_zero_info is suppressed by RichProgressBar)
+        stage_val = self.unfreeze_stages[self._current_stage_idx]
+        print(
+            f"AutoUnfreeze: epoch {trainer.current_epoch}, "
+            f"stage_idx={self._current_stage_idx} (stages={stage_val}), "
+            f"{self.monitor}={current:.4f}, best={self._best_score:.4f}, "
+            f"wait={self._wait_count}/{self.patience}, "
+            f"epochs_at_stage={self._epochs_at_stage}/{self.min_epochs_per_stage}"
+        )
+        
+        # Check if we should advance to next stage
+        if (self._wait_count >= self.patience 
+                and self._epochs_at_stage >= self.min_epochs_per_stage
+                and self._current_stage_idx < len(self.unfreeze_stages) - 1):
+            self._current_stage_idx += 1
+            self._wait_count = 0
+            self._epochs_at_stage = 0
+            self._best_score = None  # Reset best for new stage
+            self._apply_stage(trainer, pl_module, self._current_stage_idx)
+    
+    def _apply_stage(self, trainer, pl_module, stage_idx: int) -> None:
+        """Apply the given unfreeze stage."""
+        num_stages = self.unfreeze_stages[stage_idx]
+        
+        if not hasattr(pl_module, 'model') or not hasattr(pl_module.model, 'unfreeze_from_stage'):
+            print("AutoUnfreeze: Model does not support stage-based unfreezing, skipping")
+            return
+        
+        backbone = pl_module.model
+        
+        if num_stages == 0:
+            backbone.freeze_all_backbone()
+            print(
+                f"AutoUnfreeze: Stage {stage_idx}/{len(self.unfreeze_stages)-1} "
+                f"- backbone frozen (head warmup)"
+            )
+        elif num_stages == -1:
+            for param in backbone.backbone.parameters():
+                param.requires_grad = True
+            print(
+                f"AutoUnfreeze: Stage {stage_idx}/{len(self.unfreeze_stages)-1} "
+                f"- all backbone stages unfrozen"
+            )
+        else:
+            backbone.freeze_all_backbone()
+            n_total = backbone.get_num_stages()
+            start_idx = max(0, n_total - num_stages)
+            backbone.unfreeze_from_stage(start_idx)
+            print(
+                f"AutoUnfreeze: Stage {stage_idx}/{len(self.unfreeze_stages)-1} "
+                f"- unfroze last {num_stages} of {n_total} stages"
+            )
+        
+        # Rebuild optimizer with updated param groups
+        self._rebuild_optimizer(trainer, pl_module)
+        
+        trainable = backbone.get_trainable_params()
+        total = backbone.get_total_params()
+        print(f"  Trainable params: {trainable:,} / {total:,} ({100*trainable/total:.1f}%)")
+    
+    def _rebuild_optimizer(self, trainer, pl_module):
+        """Rebuild optimizer and scheduler with updated param groups."""
+        import warnings
+        current_epoch = trainer.current_epoch
+        
+        trainer.strategy.setup_optimizers(trainer)
+        
+        if trainer.lr_scheduler_configs and current_epoch > 0:
+            for config in trainer.lr_scheduler_configs:
+                scheduler = config.scheduler
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", UserWarning)
+                    for _ in range(current_epoch):
+                        scheduler.step()
+            current_lrs = [pg['lr'] for pg in trainer.optimizers[0].param_groups]
+            lr_str = ", ".join(f"{lr:.2e}" for lr in current_lrs)
+            print(
+                f"  Scheduler fast-forwarded to epoch {current_epoch}, "
+                f"current LRs: [{lr_str}]"
+            )
+        
+        print("  Optimizer rebuilt with updated param groups")
+
+
+class GradualUnfreezing(Callback):
+    """Gradually unfreeze backbone stages during training (epoch-based schedule).
+    
+    Unfreezes backbone stages from deep to shallow according to a fixed schedule.
     After unfreezing, rebuilds the optimizer with proper param groups so
     newly unfrozen parameters get discriminative learning rates.
+    
+    For automatic metric-based unfreezing, use AutoGradualUnfreezing instead.
     
     Schedule format: list of [epoch, num_stages_from_end] pairs.
     
