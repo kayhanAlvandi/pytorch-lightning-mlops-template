@@ -134,6 +134,7 @@ class Config:
     seed: int = 42
     ckpt: Optional[str] = None
     resume_from_model: Optional[str] = None
+    resume_weights_only: bool = True  # If True, load only model weights (not optimizer/scheduler/epoch)
     run_name: Optional[str] = None
     dataset_name: Optional[str] = None
     tags: Optional[List[str]] = None

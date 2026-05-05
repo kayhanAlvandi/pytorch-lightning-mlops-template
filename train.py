@@ -267,15 +267,26 @@ def main(cfg: DictConfig):
     if cfg.resume_from_model:
         if ckpt_path:
             raise ValueError("Cannot use both ckpt and resume_from_model at the same time.")
-        ckpt_path = get_checkpoint_from_mlflow_model(
+        model_ckpt_path = get_checkpoint_from_mlflow_model(
             cfg.resume_from_model,
             tracking_uri=cfg.trainer.logger.mlflow.tracking_uri,
         )
+        if cfg.resume_weights_only:
+            # Load only model weights (fresh optimizer/scheduler/epoch)
+            # Safe with gradual unfreezing — no param group mismatch
+            print(f"\nLoading model weights only from: {model_ckpt_path}")
+            checkpoint = torch.load(model_ckpt_path, map_location="cpu", weights_only=False)
+            model.load_state_dict(checkpoint["state_dict"], strict=True)
+            print("  Weights loaded (optimizer/scheduler start fresh)")
+        else:
+            # Full resume (weights + optimizer + scheduler + epoch)
+            # Requires matching param groups — use only if config is unchanged
+            ckpt_path = model_ckpt_path
 
     # Train
     print("\nStarting training...")
     if ckpt_path:
-        print(f"Resuming from checkpoint: {ckpt_path}")
+        print(f"Resuming full training state from: {ckpt_path}")
     trainer.fit(model, datamodule, ckpt_path=ckpt_path)
     
     # Test with best model
