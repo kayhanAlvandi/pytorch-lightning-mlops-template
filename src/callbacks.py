@@ -108,16 +108,13 @@ class LogBestModelToMLflow(Callback):
 
         try:
             run_name = mlflow_logger.experiment.get_run(run_id).info.run_name or run_id[:8]
-            # Sanitize run name for use as artifact path
-            safe_run_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in run_name)
-            artifact_path = f"{self.artifact_path}_{safe_run_name}"
 
             # Log raw checkpoint file first so it can be retrieved for training resumption
             mlflow.log_artifact(best_path, artifact_path="checkpoints")
 
             model_info = mlflow.pytorch.log_model(
                 model,
-                artifact_path=artifact_path,
+                name="model",
                 signature=signature,
                 input_example=example_input.cpu().numpy(),
                 registered_model_name=registered_model_name,
