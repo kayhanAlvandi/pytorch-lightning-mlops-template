@@ -3,13 +3,14 @@
 Supports loading models from:
   1. MLflow registered model: e.g. "TransferLearning/20" or "TransferLearning/latest"
   2. MLflow run name: e.g. "Vits_finetune_cosine_warmup_..."
-  3. Direct checkpoint path (fallback)
+
+Models are loaded via ``mlflow.pytorch.load_model``; the model class code is
+bundled inside the MLflow artifact (logged with ``code_paths``), so the API does
+not import any training code from ``src/``.
 """
 import json
-import sys
 from collections import Counter
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 import torch
@@ -17,12 +18,20 @@ import mlflow
 import mlflow.pytorch
 from omegaconf import OmegaConf
 
-# Add project root to path so we can import src modules
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.model import CNNClassifier, TransferLearningClassifier
-from src.transforms import Normalize
+class Normalize:
+    """Per-channel zero-mean, unit-variance normalization.
+
+    Copied from src/transforms.py to keep the API decoupled from training code.
+    """
+
+    def __init__(self, eps: float = 1e-8):
+        self.eps = eps
+
+    def __call__(self, x: torch.Tensor) -> torch.Tensor:
+        mean = x.mean(dim=(-2, -1), keepdim=True)
+        std = x.std(dim=(-2, -1), keepdim=True)
+        return (x - mean) / (std + self.eps)
 
 
 class TilePredictor:
@@ -39,13 +48,12 @@ class TilePredictor:
     
     def __init__(
         self,
-        tracking_uri: str = "file:./mlruns",
+        tracking_uri: str = "sqlite:///mlflow.db",
         experiment_name: str = "image_classifier",
         model_name: str = "",
         run_name: str = "",
-        checkpoint_path: str = "",
         crop_size: int = 224,
-        stride: Optional[int] = None,
+        stride: "int | None" = None,
         device: str = "cpu",
     ):
         self.device = torch.device(device)
@@ -56,7 +64,6 @@ class TilePredictor:
         self.model, self.model_info = self._load_model(
             model_name=model_name,
             run_name=run_name,
-            checkpoint_path=checkpoint_path,
         )
         self.model.to(self.device)
         self.model.eval()
@@ -70,8 +77,8 @@ class TilePredictor:
         # Preprocessing: normalize per-channel (zero mean, unit variance)
         self.normalize = Normalize()
     
-    def _load_model(self, model_name: str, run_name: str, checkpoint_path: str):
-        """Load model with priority: model_name > run_name > checkpoint_path.
+    def _load_model(self, model_name: str, run_name: str):
+        """Load model with priority: model_name > run_name.
         
         For MLflow sources, also downloads hydra_config.yaml and dataset_manifest.json
         to auto-configure class names, crop size, channels, etc.
@@ -92,17 +99,11 @@ class TilePredictor:
             run_id, model = self._load_from_run_name(run_name)
             info["source"] = f"run_name:{run_name}"
         
-        # ── 3. Fall back to direct checkpoint path ──
-        elif checkpoint_path:
-            model = self._load_from_checkpoint(checkpoint_path)
-            info["source"] = f"checkpoint:{checkpoint_path}"
-        
         else:
             raise ValueError(
                 "No model source specified. Set one of: "
-                "model_name (e.g. 'TransferLearning/20'), "
-                "run_name (e.g. 'my_training_run'), or "
-                "checkpoint_path (e.g. 'checkpoints/model.ckpt')"
+                "model_name (e.g. 'TransferLearning/20') or "
+                "run_name (e.g. 'my_training_run')"
             )
         
         # Extract config from MLflow run artifacts if we have a run_id
@@ -168,12 +169,11 @@ class TilePredictor:
         return run_id, model
     
     def _load_model_from_run(self, run_id: str, client):
-        """Try loading model from a run: run artifact -> registry -> checkpoint fallback.
+        """Load model from a run: run artifact -> registry.
         
-        Follows the same 3-tier pattern as Error_analysis.ipynb.
+        Models are logged via ``mlflow.pytorch.log_model`` with the model class
+        code bundled (``code_paths``), so no training code import is required.
         """
-        model = None
-        
         # 1. Try runs:/{run_id}/model (logged via mlflow.pytorch.log_model)
         try:
             model_uri = f"runs:/{run_id}/model"
@@ -196,49 +196,8 @@ class TilePredictor:
         except Exception as e:
             print(f"  Registry lookup failed: {e}")
         
-        # 3. Fall back to checkpoint artifact
-        ckpt_artifacts = client.list_artifacts(run_id, path="checkpoints")
-        if not ckpt_artifacts:
-            raise FileNotFoundError(f"No model or checkpoint found in run {run_id}")
-        
-        ckpt_local = mlflow.artifacts.download_artifacts(
-            run_id=run_id,
-            artifact_path=ckpt_artifacts[0].path,
-            tracking_uri=self.tracking_uri,
-        )
-        print(f"  Loading from checkpoint: {ckpt_local}")
-        
-        # Determine model class from hydra config
-        model = self._load_from_checkpoint(ckpt_local, run_id=run_id, client=client)
-        print(f"  ✓ Loaded from checkpoint artifact")
-        return model
-    
-    def _load_from_checkpoint(self, ckpt_path: str, run_id: str = None, client=None):
-        """Load Lightning model from a .ckpt file, auto-detecting model class."""
-        # Try to determine model class from MLflow config
-        model_cls = None
-        if run_id and client:
-            try:
-                cfg = self._download_hydra_config(run_id)
-                model_target = cfg.model._target_
-                if "TransferLearning" in model_target:
-                    model_cls = TransferLearningClassifier
-                else:
-                    model_cls = CNNClassifier
-            except Exception:
-                pass
-        
-        # Auto-detect from checkpoint if config not available
-        if model_cls is None:
-            ckpt = torch.load(ckpt_path, map_location=self.device, weights_only=False)
-            hparams = ckpt.get("hyper_parameters", {})
-            if "backbone_name" in hparams:
-                model_cls = TransferLearningClassifier
-            else:
-                model_cls = CNNClassifier
-        
-        return model_cls.load_from_checkpoint(
-            ckpt_path, map_location=self.device, weights_only=False,
+        raise FileNotFoundError(
+            f"No logged model found for run {run_id} (checked run artifact and registry)"
         )
     
     def _download_hydra_config(self, run_id: str):

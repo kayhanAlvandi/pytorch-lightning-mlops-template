@@ -19,7 +19,7 @@ pip install -r api/requirements.txt
 
 ## Run
 
-Pick **one** model source (priority: model_name > run_name > checkpoint_path):
+Pick **one** model source (priority: model_name > run_name):
 
 ```bash
 # Option 1: Load from MLflow registered model (e.g. "TransferLearning/20")
@@ -29,10 +29,6 @@ uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
 # Option 2: Load from MLflow run name
 set API_RUN_NAME=Vits_finetune_cosine_warmup_autoGradual_moredata
 uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
-
-# Option 3: Load from checkpoint file (fallback)
-set API_CHECKPOINT_PATH=checkpoints/model.ckpt
-uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ### All Environment Variables
@@ -41,8 +37,7 @@ uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
 |---|---|---|
 | `API_MODEL_NAME` | `""` | MLflow registered model, e.g. `TransferLearning/20` or `TransferLearning/latest` |
 | `API_RUN_NAME` | `""` | MLflow run name |
-| `API_CHECKPOINT_PATH` | `""` | Direct `.ckpt` path (fallback) |
-| `API_TRACKING_URI` | `file:./mlruns` | MLflow tracking URI |
+| `API_TRACKING_URI` | `sqlite:///mlflow.db` | MLflow tracking URI |
 | `API_EXPERIMENT_NAME` | `image_classifier` | MLflow experiment name |
 | `API_CROP_SIZE` | `224` | Tile size (auto-detected from MLflow if available) |
 | `API_STRIDE` | `null` | Tile stride (defaults to crop_size = non-overlapping) |

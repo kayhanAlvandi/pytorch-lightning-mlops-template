@@ -30,22 +30,21 @@ settings = Settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Load model at startup from MLflow or checkpoint."""
+    """Load model at startup from MLflow."""
     global predictor
     
     if not settings.has_model_source:
         print("WARNING: No model source configured.")
-        print("Set one of: API_MODEL_NAME, API_RUN_NAME, or API_CHECKPOINT_PATH")
+        print("Set one of: API_MODEL_NAME or API_RUN_NAME")
         print("The /predict endpoint will return an error until a model is loaded.")
     else:
-        source = settings.model_name or settings.run_name or settings.checkpoint_path
+        source = settings.model_name or settings.run_name
         print(f"Loading model: {source}")
         predictor = TilePredictor(
             tracking_uri=settings.tracking_uri,
             experiment_name=settings.experiment_name,
             model_name=settings.model_name,
             run_name=settings.run_name,
-            checkpoint_path=settings.checkpoint_path,
             crop_size=settings.crop_size,
             stride=settings.effective_stride,
             device=settings.device,
@@ -117,7 +116,7 @@ async def predict(
     if predictor is None:
         raise HTTPException(
             status_code=503,
-            detail="No model loaded. Set API_MODEL_NAME, API_RUN_NAME, or API_CHECKPOINT_PATH.",
+            detail="No model loaded. Set API_MODEL_NAME or API_RUN_NAME.",
         )
     
     try:
@@ -157,7 +156,7 @@ async def predict_single_channel(
     if predictor is None:
         raise HTTPException(
             status_code=503,
-            detail="No model loaded. Set API_MODEL_NAME, API_RUN_NAME, or API_CHECKPOINT_PATH.",
+            detail="No model loaded. Set API_MODEL_NAME or API_RUN_NAME.",
         )
     
     try:

@@ -11,17 +11,15 @@ class Settings(BaseSettings):
     Model source (pick one):
         - model_name: MLflow registered model, e.g. "TransferLearning/20" or "TransferLearning/latest"
         - run_name:   MLflow run name, e.g. "Vits_finetune_cosine_warmup_..."
-        - checkpoint_path: Direct path to a .ckpt file (fallback)
     """
     
     # ── MLflow settings ──────────────────────────────────────────────────
-    tracking_uri: str = "file:./mlruns"
+    tracking_uri: str = "sqlite:///mlflow.db"
     experiment_name: str = "image_classifier"
     
-    # ── Model source (priority: model_name > run_name > checkpoint_path) ─
+    # ── Model source (priority: model_name > run_name) ──────────────────
     model_name: str = ""       # e.g. "TransferLearning/20" or "TransferLearning/latest"
     run_name: str = ""         # e.g. "Vits_finetune_cosine_warmup_..."
-    checkpoint_path: str = ""  # e.g. "checkpoints/model.ckpt"
     
     # ── Tiling parameters ────────────────────────────────────────────────
     crop_size: int = 224
@@ -38,4 +36,4 @@ class Settings(BaseSettings):
     
     @property
     def has_model_source(self) -> bool:
-        return bool(self.model_name or self.run_name or self.checkpoint_path)
+        return bool(self.model_name or self.run_name)
