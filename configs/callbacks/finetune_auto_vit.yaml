@@ -1,6 +1,6 @@
 - _target_: pytorch_lightning.callbacks.ModelCheckpoint
   dirpath: checkpoints
-  filename: "cnn-{epoch:02d}-{val_acc:.4f}"
+  filename: "vit-{epoch:02d}-{val_acc:.4f}"
   monitor: "val/acc"
   mode: max
   save_top_k: 1
@@ -14,17 +14,20 @@
 - _target_: src.callbacks.LogBestModelToMLflow
   artifact_path: best_model
 
-# # Early stopping with warmup - patience counting only starts after min_epochs
-# - _target_: src.callbacks.EarlyStoppingWithWarmup
-#   monitor: "val/loss"
-#   # min_epochs: 30
-#   patience: 20
-#   min_delta: 0.001
-#   mode: min
-
-## Eraly stopping
+## Early stopping
 - _target_: pytorch_lightning.callbacks.EarlyStopping
   monitor: "val/loss"
   patience: 20
   min_delta: 0.001
   mode: min
+
+# Auto gradual unfreezing for ViT
+# ViT blocks are homogeneous (self-attention + FFN), so stage-by-stage
+# unfreezing doesn't help as much as CNNs. Just: head -> all.
+- _target_: src.callbacks.AutoGradualUnfreezing
+  unfreeze_stages: [0, -1]
+  monitor: val/loss
+  patience: 5
+  min_delta: 0.001
+  mode: min
+  min_epochs_per_stage: 3

@@ -4,7 +4,7 @@ batch_size: 64
 num_workers: 0
 pin_memory: true
 use_mongodb: true
-train_val_split: 0.5
+train_val_split: 0.75
 max_wells_per_label: 4
 exclude_wells:
   - ["MIG-Exp03-CP-40X-bin1X1", "K07"]
@@ -18,15 +18,15 @@ dataset:
   _target_: src.dataset.TiledMultiChannelDataset
   root_dir: "O:\\BTSData\\MeasurementData\\MIG\\MIG-Exp03-CP-40X-bin1X1_20230831_143904\\MIG-Exp03-CP-40X-bin1X1"
   channels: [1, 2, 3, 4, 5]
-  crop_size: 280
+  crop_size: 224
   stride: null
-  cache_size: 32
-  max_samples_per_label: 9
+  cache_size: 64
+  max_samples_per_label: 16
   verbose: true
 
 train_transform:
-  - name: RandomCrop
-    size: 224
+  # - name: RandomCrop
+  #   size: 224
   - name: GaussianNoise
     std: 0.05
     p: 0.5
@@ -43,8 +43,8 @@ train_transform:
   - name: Normalize
 
 val_transform:
-  - name: CenterCrop
-    size: 224
+  # - name: CenterCrop
+  #   size: 224
   - name: Normalize
 
 # Optional batch-level transform (Mixup/CutMix)

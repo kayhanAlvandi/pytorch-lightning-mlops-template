@@ -12,7 +12,9 @@ defaults:
 seed: 42
 ckpt: null
 resume_from_model: null
+resume_weights_only: null
 run_name: null
+dataset_name: null
 tags: null
 
 # Prevent Hydra from changing working directory and creating output dirs

@@ -1,12 +1,12 @@
 _target_: src.model.TransferLearningClassifier
-backbone_name: vit_small
+backbone_name: vit_base
 pretrained: true
 freeze_backbone: true
 freeze_bn: false     # ViT uses LayerNorm, not BatchNorm
-dropout: 0.3
+dropout: 0.5
 
 # Discriminative learning rates (gentler decay for 12 transformer blocks)
 # 0.65^12 ≈ 0.007, so earliest block gets ~0.007x backbone_lr
 head_lr: 0.001
-backbone_lr: 0.0001
-lr_decay_factor: 0.9
+backbone_lr: 0.00001
+lr_decay_factor: 0.4

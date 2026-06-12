@@ -14,17 +14,21 @@
 - _target_: src.callbacks.LogBestModelToMLflow
   artifact_path: best_model
 
-# # Early stopping with warmup - patience counting only starts after min_epochs
-# - _target_: src.callbacks.EarlyStoppingWithWarmup
-#   monitor: "val/loss"
-#   # min_epochs: 30
-#   patience: 20
-#   min_delta: 0.001
-#   mode: min
-
 ## Eraly stopping
 - _target_: pytorch_lightning.callbacks.EarlyStopping
   monitor: "val/loss"
-  patience: 20
+  patience: 10
   min_delta: 0.001
   mode: min
+
+# Auto gradual unfreezing - monitors val/loss and unfreezes next stage
+# when improvement stalls for `patience` epochs.
+# EfficientNet-B3 has 9 stages: stem, blocks.0-6, neck
+# Stages list: [head_only, last_2, last_4, last_5, all]
+- _target_: src.callbacks.AutoGradualUnfreezing
+  unfreeze_stages: [0, 2, 5, -1]
+  monitor: val/loss
+  patience: 5
+  min_delta: 0.001
+  mode: min
+  min_epochs_per_stage: 3

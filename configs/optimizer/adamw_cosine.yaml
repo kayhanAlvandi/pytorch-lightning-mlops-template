@@ -8,5 +8,5 @@ scheduler:
   _target_: torch.optim.lr_scheduler.CosineAnnealingLR
   _partial_: true
   T_max: -1              # Auto-resolved from trainer.max_epochs
-  eta_min: 0.00001       # Minimum LR (1/100 of initial)
+  eta_min: 0.0000001     # Minimum LR floor for all groups (1e-7)
   warmup_fraction: 0.1   # First 10% of epochs: linear warmup from ~0 to target LR

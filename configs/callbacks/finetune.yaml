@@ -29,6 +29,8 @@
 - _target_: src.callbacks.GradualUnfreezing
   unfreeze_schedule:
     - [0,  0]      # Epochs 0-4:   head warmup (backbone frozen)
-    - [5,  2]      # Epochs 5-14:  unfreeze last 2 stages (neck + blocks.6)
-    - [15, 5]      # Epochs 15-29: unfreeze last 5 stages
-    - [30, -1]     # Epoch 30+:    unfreeze all stages
+    - [15,  2]      # Epochs 5-14:  unfreeze last 2 stages (neck + blocks.6)
+    - [30, 3]      # Epoch 15-29:  unfreeze last 3 stages (blocks.4-6)
+    - [45, 4]      # Epoch 30-39:  unfreeze last 4 stages (blocks.3-6)
+    - [60, 5]      # Epoch 40-59:  unfreeze last 5 stages
+    - [75, -1]     # Epoch 60+:    unfreeze all stages
