@@ -33,7 +33,7 @@ def _flatten_dict(d: dict, parent_key: str = "", sep: str = ".") -> dict:
     return dict(items)
 
 
-def get_checkpoint_from_mlflow_model(model_ref: str, tracking_uri: str = "file:./mlruns") -> str:
+def get_checkpoint_from_mlflow_model(model_ref: str, tracking_uri: str = "sqlite:///mlflow.db") -> str:
     """
     Download checkpoint artifact from an MLflow registered model version.
 

@@ -99,7 +99,7 @@ class TensorBoardLoggerConfig:
 class MLflowLoggerConfig:
     _target_: str = "pytorch_lightning.loggers.MLFlowLogger"
     experiment_name: str = "image_classifier"
-    tracking_uri: str = "file:./mlruns"
+    tracking_uri: str = "sqlite:///mlflow.db"
 
 
 @dataclass

@@ -32,7 +32,7 @@ from mlflow.tracking import MlflowClient
 import pandas as pd
 
 # Defaults
-TRACKING_URI = "file:./mlruns"
+TRACKING_URI = "sqlite:///mlflow.db"
 EXPERIMENT_NAME = "image_classifier"
 
 

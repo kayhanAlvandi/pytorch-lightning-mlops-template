@@ -209,7 +209,7 @@ def main():
     parser.add_argument("--run-id", action="store_true", help="Treat arguments as run IDs instead of names")
     parser.add_argument("--experiment", default="image_classifier", help="MLflow experiment name")
     parser.add_argument("--artifact", default="hydra_config.yaml", help="Config artifact filename")
-    parser.add_argument("--tracking-uri", default="file:./mlruns", help="MLflow tracking URI")
+    parser.add_argument("--tracking-uri", default="sqlite:///mlflow.db", help="MLflow tracking URI")
     
     args = parser.parse_args()
     
