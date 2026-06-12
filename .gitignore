@@ -30,6 +30,8 @@ wheels/
 *.spec
 
 mlruns/
+mlruns_backup/
+mlflow.db*
 
 # Installer logs
 pip-log.txt
