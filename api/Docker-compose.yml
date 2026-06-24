@@ -3,6 +3,7 @@ services:
     build:
       context: ..
       dockerfile: api/Dockerfile
+    image: image_classifier_api
     container_name: fastapi_image_classifier
     ports:
       - "8000:8000"
@@ -15,6 +16,7 @@ services:
     volumes:
       - ../mlflow.db:/app/mlflow.db
       - ../mlruns:/app/mlruns
+      - /mnt/O:/mnt/O:rw
     # restart: unless-stopped
     deploy:
       resources:
