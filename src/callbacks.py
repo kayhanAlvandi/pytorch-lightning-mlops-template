@@ -118,7 +118,7 @@ class LogBestModelToMLflow(Callback):
                 signature=signature,
                 input_example=example_input.cpu().numpy(),
                 registered_model_name=registered_model_name,
-                code_paths=["src/model.py"]
+                code_paths=["src"]
             )
             
             # Add description and tags to the registered model version
