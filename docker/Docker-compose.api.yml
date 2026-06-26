@@ -2,22 +2,22 @@ services:
   api:
     build:
       context: ..
-      dockerfile: api/Dockerfile
+      dockerfile: docker/Dockerfile.api
     image: image_classifier_api
-    container_name: fastapi_image_classifier
+    container_name: image_classifier_api
     ports:
       - "8000:8000"
     environment:
       - API_MODEL_NAME=${API_MODEL_NAME}
       - API_RUN_NAME=Vits_finetune_cosine_warmup_autoGradual_moredata_moresamples_augmentation
       - API_DEVICE=cuda
-      - API_TRACKING_URI=sqlite:////app/mlflow.db
+      - API_TRACKING_URI=http://mlflow:5000
       - API_EXPERIMENT_NAME=${API_EXPERIMENT_NAME:-image_classifier}
     volumes:
-      - ../mlflow.db:/app/mlflow.db
-      - ../mlruns:/app/mlruns
       - /mnt/O:/mnt/O:rw
-    # restart: unless-stopped
+    restart: unless-stopped
+    depends_on:
+      - mlflow
     deploy:
       resources:
         reservations:
