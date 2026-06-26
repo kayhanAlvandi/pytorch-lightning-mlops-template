@@ -17,7 +17,7 @@ import os
 import requests
 
 
-BASE_URL = "http://localhost:8000"
+BASE_URL = "http://127.0.0.1:8000"
 ROOT_DIR = "O:\\BTSData\\MeasurementData\\MIG\\MIG-Exp03-CP-40X-bin1X1_20230831_143904\\MIG-Exp03-CP-40X-bin1X1"
 
 def print_result(result: dict):
