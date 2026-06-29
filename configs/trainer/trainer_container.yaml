@@ -1,0 +1,20 @@
+_target_: pytorch_lightning.Trainer
+max_epochs: 50
+min_epochs: null
+accelerator: cuda
+devices: 1
+precision: "16-mixed"
+log_every_n_steps: 10
+deterministic: true
+gradient_clip_val: 10000
+
+logger:
+  tensorboard:
+    _target_: pytorch_lightning.loggers.TensorBoardLogger
+    save_dir: logs
+    name: image_classifier
+
+  mlflow:
+    _target_: pytorch_lightning.loggers.MLFlowLogger
+    experiment_name: image_classifier
+    tracking_uri: "http://mlflow:5000"
