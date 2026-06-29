@@ -1,0 +1,12 @@
+FROM pytorch/pytorch:2.10.0-cuda12.6-cudnn9-runtime
+
+LABEL maintainer="Kayhan Alvandi <keyhanalvandi96@gmail.com>"
+LABEL description="Training environment for image classification with PyTorch Lightning"
+
+WORKDIR /workspace
+
+COPY src/requirements.txt .
+RUN pip install --no-cache-dir --break-system-packages -r requirements.txt
+
+# CMD ["python", "train.py"]
+CMD ["sleep", "infinity"]
