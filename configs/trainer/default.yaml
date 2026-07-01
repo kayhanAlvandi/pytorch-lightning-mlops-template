@@ -17,4 +17,4 @@ logger:
   mlflow:
     _target_: pytorch_lightning.loggers.MLFlowLogger
     experiment_name: image_classifier
-    tracking_uri: "sqlite:///mlflow.db"
+    tracking_uri: "http://localhost:5000"
