@@ -8,5 +8,9 @@ WORKDIR /workspace
 COPY src/requirements.txt .
 RUN pip install --no-cache-dir --break-system-packages -r requirements.txt
 
+# install tools in container startup
+RUN echo '#!/bin/bash\npip install -e /workspace/tools 2>/dev/null\nexec "$@"' > /entrypoint.sh && chmod +x /entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]
+
 # CMD ["python", "train.py"]
 CMD ["sleep", "infinity"]
