@@ -5,16 +5,17 @@ services:
       dockerfile: docker/Dockerfile.api
     image: image_classifier_api
     container_name: image_classifier_api
+    env_file: .env.api
     ports:
       - "8000:8000"
     environment:
-      - API_MODEL_NAME=${API_MODEL_NAME}
-      - API_RUN_NAME=Vits_finetune_cosine_warmup_autoGradual_moredata_moresamples_augmentation
-      - API_DEVICE=cuda
-      - API_TRACKING_URI=http://mlflow:5000
-      - API_EXPERIMENT_NAME=${API_EXPERIMENT_NAME:-image_classifier}
+      - API_MODEL_NAME
+      - API_RUN_NAME
+      - API_DEVICE
+      - API_TRACKING_URI
+      - API_EXPERIMENT_NAME
     volumes:
-      - /mnt/O:/mnt/O:rw
+      - ${O_DRIVE_PATH}:/mnt/O:rw
     restart: unless-stopped
     depends_on:
       - mlflow

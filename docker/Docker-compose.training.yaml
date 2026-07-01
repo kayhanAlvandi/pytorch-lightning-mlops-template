@@ -5,14 +5,16 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.training
     container_name: training
+    env_file: .env.training
     volumes:
-      - /mnt/O:/mnt/O:rw # dataset access
+      - ${O_DRIVE_PATH}:/mnt/O:rw # dataset access
+      - ${TOOLS_LIB_PATH}:/workspace/tools:ro # access to tools library
       - ../train.py:/workspace/train.py:ro # training script
       - ../configs:/workspace/configs:ro # config files
       - ../src:/workspace/src:ro # source code
       - ../logs:/workspace/logs:rw # tensorboard logs
     environment:
-      - PYTHONPATH=/workspace
+      - PYTHONPATH
     deploy:
       resources:
         reservations:
