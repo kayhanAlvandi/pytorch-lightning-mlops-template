@@ -8,12 +8,6 @@ services:
     env_file: .env.api
     ports:
       - "8000:8000"
-    environment:
-      - API_MODEL_NAME
-      - API_RUN_NAME
-      - API_DEVICE
-      - API_TRACKING_URI
-      - API_EXPERIMENT_NAME
     volumes:
       - ${O_DRIVE_PATH}:/mnt/O:rw
     restart: unless-stopped

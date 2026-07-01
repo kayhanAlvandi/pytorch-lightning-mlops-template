@@ -13,8 +13,6 @@ services:
       - ../configs:/workspace/configs:ro # config files
       - ../src:/workspace/src:ro # source code
       - ../logs:/workspace/logs:rw # tensorboard logs
-    environment:
-      - PYTHONPATH
     deploy:
       resources:
         reservations:
