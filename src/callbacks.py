@@ -86,15 +86,15 @@ class LogBestModelToMLflow(Callback):
 
         model = pl_module.__class__.load_from_checkpoint(best_path)
         model.eval()
-        model.to(pl_module.device)
+        model.cpu()
 
-        example_input = self._example_input.to(pl_module.device)
+        example_input = self._example_input.cpu()
         with torch.no_grad():
             example_output = model(example_input)
 
         signature = infer_signature(
-            example_input.cpu().numpy(),
-            example_output.cpu().numpy(),
+            example_input.numpy(),
+            example_output.numpy(),
         )
 
         registered_model_name = self._get_registered_model_name(pl_module)
@@ -116,9 +116,10 @@ class LogBestModelToMLflow(Callback):
                 model,
                 name="model",
                 signature=signature,
-                input_example=example_input.cpu().numpy(),
+                input_example=example_input,
                 registered_model_name=registered_model_name,
-                code_paths=["src"]
+                code_paths=["src"],
+                serialization_format="pickle",
             )
             
             # Add description and tags to the registered model version
