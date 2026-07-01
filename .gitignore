@@ -63,6 +63,9 @@ coverage.xml
 
 # Environment
 .env
+.env.api
+.env.training
+docker/.env
 .venv
 env/
 venv/
