@@ -1,30 +1,54 @@
-# CNN Classifier for Multi-Channel Microscopy Images
+# pytorch-lightning-mlops-template
 
-A PyTorch Lightning project for classifying multi-channel microscopy images with configurable channel selection and random cropping.
+An end-to-end **MLOps template** for image classification, built on **PyTorch Lightning** and **Hydra**, with **MLflow** experiment tracking + model registry, a **FastAPI** serving layer, and **Docker Compose** for reproducible training and deployment.
+
+The template ships with a working multi-channel microscopy classifier as a reference implementation, but the training loop, config system, tracking, and serving stack are model- and dataset-agnostic — swap in your own dataset, transforms, and architecture via config.
+
+## Features
+
+- **PyTorch Lightning** training loop with a swappable `LightningModule` and `LightningDataModule`.
+- **Hydra** config groups for `datamodule`, `model`, `optimizer`, `loss`, `callbacks`, and `trainer` — compose experiments from the CLI, no code edits.
+- **MLflow** tracking (params, metrics, system metrics), artifact logging, and Model Registry with resume-from-registered-model support.
+- **Dual logging**: MLflow + TensorBoard.
+- **Dataset versioning**: content-hashed dataset version, manifest, and metadata logged per run for reproducibility.
+- **FastAPI** serving that loads a model directly from MLflow (by registered name or run name) and performs tiled inference with majority voting.
+- **Docker Compose** stacks for MLflow, GPU training, and the API, orchestrated via a `Makefile`.
+- A model zoo of ready-to-use configs: `simplecnn`, `resnet18/50`, `efficientnet_b0/b3`, `vit_small/base` (+ fine-tune variants).
 
 ## Project Structure
 
 ```
-cnn_classifier/
-├── config/
-│   └── config.yaml        # Configuration file
+pytorch-lightning-mlops-template/
+├── configs/                    # Hydra config groups
+│   ├── config.yaml             # Root config (composes the groups below)
+│   ├── datamodule/             # Dataset + dataloader configs
+│   ├── model/                  # Architecture configs (cnn, resnet, efficientnet, vit, ...)
+│   ├── optimizer/              # Optimizer + scheduler configs
+│   ├── loss/                   # Loss function configs
+│   ├── callbacks/              # Lightning callback configs
+│   └── trainer/                # Trainer configs (local / container)
 ├── src/
-│   ├── __init__.py
-│   ├── config.py          # Configuration dataclasses
-│   ├── dataset.py         # Custom dataset for multi-channel images
-│   ├── datamodule.py      # PyTorch Lightning DataModule
-│   ├── transforms.py      # Image transformations
-│   └── model.py           # CNN model and Lightning module
-├── train.py               # Training script
-├── requirements.txt       # Python dependencies
+│   ├── config.py               # Config dataclasses
+│   ├── dataset.py              # Multi-channel image dataset
+│   ├── datamodule.py           # LightningDataModule
+│   ├── transforms.py           # Image / batch transforms (incl. Mixup/CutMix)
+│   ├── model.py                # LightningModule + architectures
+│   ├── callbacks.py            # Custom callbacks (e.g. LogBestModelToMLflow)
+│   └── dataset_versioning.py   # Dataset hashing, manifest, git tracking
+├── api/                        # FastAPI serving layer (loads model from MLflow)
+├── docker/                     # Dockerfiles, compose files, Makefile
+├── tests/                      # Checkpoint / hparams tests
+├── benchmarks/                 # Dataloader & model benchmarks
+├── train.py                    # Hydra entrypoint for training
+├── MLFLOW_GUIDE.md             # MLflow usage guide
 └── README.md
 ```
 
 ## Installation
 
-### 1. Set up PYTHONPATH for shared tools library
+### 1. (Reference dataset only) Set up PYTHONPATH for the shared tools library
 
-This project uses the shared `tools.loading` module. Add it to your conda environment:
+The bundled microscopy example uses the shared `tools.loading` module. If you use the template with your own dataset you can skip this.
 
 ```bash
 conda env config vars set PYTHONPATH=L:\GITHUB\LIB_Python
@@ -34,116 +58,116 @@ conda activate tools  # reactivate to apply
 ### 2. Install dependencies
 
 ```bash
-pip install -r requirements.txt
+pip install -r src/requirements.txt
 ```
 
-## Configuration
+## Configuration (Hydra)
 
-Edit `config/config.yaml` to customize:
+The root config `configs/config.yaml` composes one option from each config group:
 
-- **data.root_dir**: Path to your image directory
-- **data.channels**: List of channels to use (1-5)
-- **data.crop_size**: Random crop size for training
-- **data.num_classes**: Number of classification classes
-- **dataloader**: Batch size, workers, etc.
-- **training**: Epochs, learning rate, weight decay
-- **model**: Dropout rate
+```yaml
+defaults:
+  - datamodule: tiled
+  - model: simplecnn
+  - optimizer: adamw
+  - loss: cross_entropy
+  - callbacks: default
+  - trainer: default
+```
+
+Override any group or value from the CLI — no code changes required.
 
 ## Usage
 
-### Basic Training
+### Basic training
 
 ```bash
-python train.py --config config/config.yaml
+python train.py
 ```
 
-### Override Configuration via CLI
+### Compose experiments via config overrides
 
 ```bash
-# Use specific channels
-python train.py --channels 1 2 3
+# Swap the architecture
+python train.py model=resnet50
+python train.py model=vit_base_finetune
 
-# Custom crop size and batch size
-python train.py --crop-size 256 --batch-size 32
+# Swap optimizer / loss / datamodule
+python train.py optimizer=sgd loss=focal
 
-# Custom learning rate and epochs
-python train.py --lr 0.0005 --epochs 100
-
-# Use MongoDB for labels
-python train.py --use-mongodb
+# Override individual values
+python train.py seed=123 run_name=my_experiment tags=[baseline,lr_sweep]
 ```
 
-### Channel Selection Examples
+### Resume / fine-tune from a registered MLflow model
 
 ```bash
-# Single channel
-python train.py --channels 1
+# Full resume (weights + optimizer + scheduler + epoch)
+python train.py resume_from_model=SimpleCNN/11
 
-# Two channels
-python train.py --channels 1 4
-
-# All 5 channels
-python train.py --channels 1 2 3 4 5
+# Load weights only (fresh optimizer/scheduler — safe for gradual unfreezing)
+python train.py resume_from_model=SimpleCNN/latest resume_weights_only=true
 ```
 
-## Data Format
+## Experiment Tracking
 
-Images should follow this naming pattern:
+Training uses dual logging:
+
+- **MLflow** — params, metrics, system metrics, artifacts (Hydra config, dataset manifest/metadata), and Model Registry.
+- **TensorBoard** — real-time curves, confusion matrices, sample predictions.
+
+```bash
+mlflow ui                 # http://localhost:5000
+tensorboard --logdir logs # http://localhost:6006
+```
+
+Each run automatically logs a content-hashed **dataset version** plus the model code git commit, so experiments are reproducible. See `MLFLOW_GUIDE.md` for details.
+
+## Serving (FastAPI)
+
+The API loads a trained model directly from MLflow and serves tiled predictions with majority voting. See `api/README.md` for full endpoint docs.
+
+```bash
+# Point the API at a registered model or a run name
+set API_MODEL_NAME=SimpleCNN/latest
+uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+## Docker
+
+Reproducible stacks are defined under `docker/` and orchestrated via the `Makefile` (run from the `docker/` directory):
+
+```bash
+make mlflow      # start the MLflow tracking server (prerequisite)
+make train       # run a one-off GPU training job
+make train-run CMD="python train.py model=vit_base"  # training with overrides
+make serve       # start MLflow + the API
+make down        # stop API stack
+make down-all    # stop all services
+```
+
+Services:
+
+- **mlflow** — tracking server (SQLite backend, artifact store) on port `5000`.
+- **training** — GPU-enabled one-off training container.
+- **api** — FastAPI serving container on port `8000`.
+
+## Using This Template
+
+1. Click **"Use this template"** on GitHub (or clone) to create your own repo.
+2. Replace the dataset logic in `src/dataset.py` / `src/datamodule.py` and its config in `configs/datamodule/`.
+3. Add or pick an architecture in `configs/model/` (or extend `src/model.py`).
+4. Adjust `configs/` for your optimizer, loss, callbacks, and trainer.
+5. Train, track in MLflow, register your best model, and serve it via the API.
+
+## Reference Implementation: Multi-Channel Microscopy
+
+The included example classifies multi-channel microscopy images with configurable channel selection and tiled cropping.
+
+Image naming pattern:
 ```
 {plate}_{well}_T{time}F{field}L{layer}A{action}Z{z}C{channel}.jxl
 ```
+Example: `MIG-Exp03-CP-40X-bin1X1_K07_T0001F001L01A01Z01C01.jxl`
 
-Example:
-```
-MIG-Exp03-CP-40X-bin1X1_K07_T0001F001L01A01Z01C01.jxl
-```
-
-- **plate**: Plate identifier
-- **well**: Well position (e.g., K07)
-- **C**: Channel number (01-05)
-- **F**: Field number
-
-## Labels
-
-Labels are retrieved based on plate and well information:
-
-1. **Dummy Labels** (default): Random labels for testing
-2. **MongoDB**: Query MongoDB with plate/well to get actual labels
-
-For MongoDB, ensure your database has documents with:
-```json
-{
-    "plate": "MIG-Exp03-CP-40X-bin1X1",
-    "well": "K07",
-    "label": 0
-}
-```
-
-## Model Architecture
-
-Simple CNN with:
-- 4 convolutional blocks (32 → 64 → 128 → 256 channels)
-- BatchNorm + ReLU activation
-- MaxPooling after each block
-- Global Average Pooling
-- Fully connected classifier with dropout
-
-## Outputs
-
-- **checkpoints/**: Model checkpoints
-- **logs/**: TensorBoard logs
-
-View training progress:
-```bash
-tensorboard --logdir logs
-```
-
-## Next Steps (Future Complexity)
-
-1. Add more sophisticated architectures (ResNet, EfficientNet)
-2. Implement data augmentation strategies
-3. Add cross-validation
-4. Implement proper MongoDB label loading
-5. Add inference script
-6. Add attention mechanisms
-7. Implement multi-task learning
+Labels are resolved from plate/well information (dummy labels by default, or MongoDB).
