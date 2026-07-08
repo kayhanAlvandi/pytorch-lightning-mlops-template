@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+#
+# Pre-push hook: run the GPU test suite locally before pushing.
+#
+# GitHub-hosted CI runners have no GPU, so GPU tests can only be verified
+# locally. This hook is the "don't forget" mechanism.
+#
+# Enable it once per clone with:
+#     git config core.hooksPath .githooks
+# (or: make hooks)
+#
+# On a machine without CUDA, the GPU tests are skipped automatically
+# (pytest.mark.skipif), so this hook is a no-op there and won't block pushes.
+#
+# To bypass in a hurry:  git push --no-verify
+set -euo pipefail
+
+echo "[pre-push] Running GPU tests (pytest -m gpu)..."
+
+if ! command -v pytest >/dev/null 2>&1; then
+    echo "[pre-push] pytest not found on PATH; skipping GPU check." >&2
+    exit 0
+fi
+
+pytest -m "gpu" -q
+echo "[pre-push] GPU tests passed (or skipped: no CUDA)."
