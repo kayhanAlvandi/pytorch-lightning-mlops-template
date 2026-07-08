@@ -1,0 +1,61 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'api/**'
+      - 'tests/**'
+      - 'configs/**'
+      - 'src/requirements.txt'
+      - '.github/workflows/ci.yml'
+      - 'train.py'
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      run_tests:
+        description: 'Which test suite to run (CPU only; GPU tests run locally)'
+        required: true
+        default: fast
+        type: choice
+        options:
+          - fast
+          - integration
+          - all
+
+
+jobs:
+  # Fast CPU suite: runs automatically on push and pull_request.
+  test-push: 
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run ruff check
+        uses: astral-sh/ruff-action@v3
+        with:
+          args: check .
+      - name: Set up Python
+        uses: ./.github/actions/setup-env
+      - name: Run tests
+        run: pytest -m "not slow" -q
+  # Manual suite selection via the Actions "Run workflow" button.
+  # GPU tests are excluded (no CUDA on GitHub-hosted runners); run them locally.
+  test-dispatch:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: ./.github/actions/setup-env
+      - name: Run fast tests
+        if: inputs.run_tests == 'fast'
+        run: pytest -m "not slow" -q
+      - name: Run integration tests (CPU only)
+        if: inputs.run_tests == 'integration'
+        run: pytest -m "integration and not gpu" -q
+      - name: Run all tests (CPU only)
+        if: inputs.run_tests == 'all'
+        run: pytest -m "not gpu" -q
