@@ -4,6 +4,8 @@ import pytorch_lightning as pl
 from omegaconf import OmegaConf
 from hydra.utils import instantiate
 from pathlib import Path
+from pytorch_lightning.callbacks import ModelCheckpoint
+from torch.utils.data import DataLoader, TensorDataset
 
 
 class TestModel(pl.LightningModule):
@@ -50,8 +52,7 @@ for k, v in model.hparams.items():
 
 # Save Lightning checkpoint using proper Lightning mechanism
 ckpt_path = "test_lightning.ckpt"
-from pytorch_lightning.callbacks import ModelCheckpoint
-from torch.utils.data import DataLoader, TensorDataset
+
 
 checkpoint_callback = ModelCheckpoint(dirpath=".", filename="test_lightning", save_top_k=1)
 trainer = pl.Trainer(
@@ -76,7 +77,7 @@ try:
     loaded = TestModel.load_from_checkpoint(ckpt_path, weights_only=True)
     print("✓ Loaded with weights_only=True")
 except Exception as e:
-    print(f"✗ Failed with weights_only=True:")
+    print("✗ Failed with weights_only=True:")
     print(f"   {type(e).__name__}: {str(e)[:2000]}")
 
 # Try to load with weights_only=False
@@ -123,7 +124,7 @@ try:
     loaded2 = TestModel.load_from_checkpoint(ckpt_path2, weights_only=True)
     print("✓ Loaded with weights_only=True")
 except Exception as e:
-    print(f"✗ Failed with weights_only=True:")
+    print("✗ Failed with weights_only=True:")
     print(f"   {type(e).__name__}: {str(e)[:2000]}")
 
 # Try to load with weights_only=False
@@ -190,7 +191,7 @@ try:
     loaded3 = TestModel.load_from_checkpoint(ckpt_path3, weights_only=True)
     print("✓ Loaded with weights_only=True")
 except Exception as e:
-    print(f"✗ Failed with weights_only=True:")
+    print("✗ Failed with weights_only=True:")
     print(f"   {type(e).__name__}: {str(e)[:2000]}")
 
 # Try to load with weights_only=False
@@ -242,7 +243,7 @@ try:
     loaded4 = TestModel.load_from_checkpoint(ckpt_path4, weights_only=True)
     print("✓ Loaded with weights_only=True")
 except Exception as e:
-    print(f"✗ Failed with weights_only=True:")
+    print("✗ Failed with weights_only=True:")
     print(f"   {type(e).__name__}: {str(e)[:2000]}")
 
 # Try to load with weights_only=False

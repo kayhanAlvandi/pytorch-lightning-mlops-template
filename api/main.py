@@ -16,12 +16,13 @@ import numpy as np
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse
 
+from api.config import Settings
+from api.predictor import TilePredictor
+
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from api.config import Settings
-from api.predictor import TilePredictor
 
 # Global predictor instance (loaded at startup)
 predictor: Optional[TilePredictor] = None
@@ -208,7 +209,6 @@ def _load_single_image(content: bytes, filename: str) -> np.ndarray:
     """Load a single image from bytes into a 2D numpy array."""
     import cv2
     from PIL import Image
-    import pillow_jxl 
 
     suffix = Path(filename).suffix.lower()
     if suffix in (".tif", ".tiff"):

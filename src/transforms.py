@@ -7,7 +7,7 @@ Sample-level transforms are composed into a pipeline via ``build_transforms()``.
 Batch-level transforms (Mixup, CutMix) operate on (B, C, H, W) batches and
 are applied inside the training loop, not per-sample.
 """
-from typing import Callable, Dict, List, Optional, Tuple, Union
+from typing import Callable, Dict, List, Optional, Tuple
 
 import torch
 import torch.nn as nn

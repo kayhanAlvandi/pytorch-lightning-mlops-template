@@ -8,10 +8,10 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 from PIL import Image
-from tools.loading import getCategories
+
 
 try:
-    import pillow_jxl  # JXL support for PIL
+    import pillow_jxl  # JXL support for PIL  # noqa: F401
 except ImportError:
     print("Warning: pillow-jxl not installed. JXL files may not load.")
 
@@ -558,12 +558,8 @@ class MongoDBLabelsProvider:
     
     def __init__(
         self,
-        uri: str = "mongodb://localhost:27017",
-        database: str = "bts_data",
         collection: str = "labels",
     ):
-        self.uri = uri
-        self.database = database
         self.collection = collection
     
     def get_labels(
@@ -577,10 +573,7 @@ class MongoDBLabelsProvider:
             root_dir: Root directory containing images.
             exclude_wells: List of (plate, well) tuples to exclude (corrupted images).
         """
-        try:
-            from pymongo import MongoClient
-        except ImportError:
-            raise ImportError("pymongo is required for MongoDB label provider")
+        from tools.loading import getCategories
         
         root_path = Path(root_dir)
         plate_wells = set()

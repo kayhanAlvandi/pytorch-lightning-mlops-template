@@ -50,7 +50,7 @@ def run_training(model_config, experiment_name, extra_overrides, tags):
     print(f"Command: {' '.join(cmd)}")
     
     try:
-        result = subprocess.run(
+        _ = subprocess.run(
             cmd,
             check=True,
             capture_output=False,
@@ -75,7 +75,7 @@ def main():
     print("=" * 80)
     print(f"Total experiments: {len(EXPERIMENTS)}")
     print(f"Max epochs per experiment: {MAX_EPOCHS}")
-    print(f"\nModels to benchmark:")
+    print("\nModels to benchmark:")
     for model_config, desc, _, tags in EXPERIMENTS:
         print(f"  - {desc} (model={model_config})")
     print("=" * 80)
@@ -127,7 +127,7 @@ def main():
         print("TRANSFER LEARNING BENCHMARK SUMMARY")
         print("=" * 80)
         print(f"Total time: {total_duration/3600:.2f} hours")
-        print(f"\nResults:")
+        print("\nResults:")
         print(f"{'Experiment':<30} {'Model Config':<20} {'Status':<12} {'Time (min)':<12}")
         print("-" * 75)
         

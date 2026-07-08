@@ -1,12 +1,11 @@
 """Simple CNN model with PyTorch Lightning."""
 from functools import partial
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 import math
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import pytorch_lightning as pl
 from torchmetrics import Accuracy, F1Score, ConfusionMatrix
 import timm
@@ -14,7 +13,6 @@ import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend for threading
 import matplotlib.pyplot as plt
 import numpy as np
-import io
 
 
 class SimpleCNN(nn.Module):
@@ -979,7 +977,7 @@ class TransferLearningClassifier(BaseClassifier):
         print(f"Model: {backbone_name} | Total params: {total_params:,} | Trainable: {trainable_params:,} ({100*trainable_params/total_params:.1f}%)")
         print(f"Backbone stages: {self.model.get_stage_names()}")
         if freeze_bn:
-            print(f"BatchNorm layers frozen in eval mode (pretrained stats preserved)")
+            print("BatchNorm layers frozen in eval mode (pretrained stats preserved)")
     
     def configure_optimizers(self):
         """Create optimizer with discriminative learning rates if configured.

@@ -1,5 +1,5 @@
 """PyTorch Lightning DataModule for multi-channel images."""
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import pytorch_lightning as pl
 from hydra.utils import get_class, instantiate

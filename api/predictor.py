@@ -179,7 +179,7 @@ class TilePredictor:
             model_uri = f"runs:/{run_id}/model"
             print(f"  Trying: {model_uri}")
             model = mlflow.pytorch.load_model(model_uri, map_location=self.device)
-            print(f"  ✓ Loaded from run artifact")
+            print("  ✓ Loaded from run artifact")
             return model
         except Exception:
             pass
@@ -191,7 +191,7 @@ class TilePredictor:
                     model_uri = f"models:/{mv.name}/{mv.version}"
                     print(f"  Trying registry: {model_uri}")
                     model = mlflow.pytorch.load_model(model_uri, map_location=self.device)
-                    print(f"  ✓ Loaded from model registry")
+                    print("  ✓ Loaded from model registry")
                     return model
         except Exception as e:
             print(f"  Registry lookup failed: {e}")

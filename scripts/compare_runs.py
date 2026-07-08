@@ -12,7 +12,6 @@ Examples:
 import argparse
 import sys
 import tempfile
-from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 import yaml
@@ -86,7 +85,7 @@ def deep_diff(v1: Any, v2: Any, path: str = "") -> list:
     """
     diffs = []
     
-    if type(v1) != type(v2):
+    if type(v1) is not type(v2):
         # Different types - report as changed
         diffs.append((path, v1, v2))
     elif isinstance(v1, dict) and isinstance(v2, dict):
@@ -173,8 +172,8 @@ def compare_configs(cfg1: Dict[str, Any], cfg2: Dict[str, Any], name1: str, name
         print(colored("  " + "─" * 50, Colors.DIM))
         for key, v1, v2 in changed:
             print(colored(f"    {key}", Colors.BOLD))
-            print(colored(f"      ◀ ", Colors.RED) + colored(f"{name1}: ", Colors.DIM) + str(v1))
-            print(colored(f"      ▶ ", Colors.GREEN) + colored(f"{name2}: ", Colors.DIM) + str(v2))
+            print(colored("      ◀ ", Colors.RED) + colored(f"{name1}: ", Colors.DIM) + str(v1))
+            print(colored("      ▶ ", Colors.GREEN) + colored(f"{name2}: ", Colors.DIM) + str(v2))
     
     if added:
         print(colored(f"\n  ✚ ADDED in {name2} ({len(added)})", Colors.GREEN, Colors.BOLD))

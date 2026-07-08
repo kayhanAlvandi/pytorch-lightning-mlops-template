@@ -1,8 +1,9 @@
 """Test what gets saved in save_hyperparameters with OmegaConf inputs."""
 import torch
 import pytorch_lightning as pl
-from omegaconf import OmegaConf, DictConfig, ListConfig
+from omegaconf import OmegaConf
 from hydra.utils import instantiate
+import os
 
 
 class TestModel(pl.LightningModule):
@@ -91,7 +92,6 @@ except Exception as e:
 
 
 # Cleanup
-import os
 for f in ["test_checkpoint1.ckpt", "test_checkpoint2.ckpt", "test_checkpoint3.ckpt"]:
     if os.path.exists(f):
         os.remove(f)

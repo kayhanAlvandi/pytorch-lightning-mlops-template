@@ -1,6 +1,6 @@
 """Custom PyTorch Lightning callbacks."""
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 import torch
 from pytorch_lightning.callbacks import Callback, ModelCheckpoint

@@ -8,12 +8,11 @@ import pandas as pd
 import torch
 import pytorch_lightning as pl
 from hydra.utils import instantiate
-from omegaconf import DictConfig, OmegaConf, open_dict
+from omegaconf import DictConfig, OmegaConf
 
 from src.dataset_versioning import (
     create_dataset_metadata,
     create_dataset_manifest,
-    compute_dataset_version,
     get_git_commit_for_model_files,
     check_model_uncommitted_changes,
 )
@@ -111,7 +110,7 @@ def main(cfg: DictConfig):
     train_samples = len(datamodule.train_dataset)
     val_samples = len(datamodule.val_dataset)
     
-    print(f"\nDataset Statistics:")
+    print("\nDataset Statistics:")
     print(f"  Training samples: {train_samples}")
     print(f"  Validation samples: {val_samples}")
     print(f"  Total samples: {train_samples + val_samples}")

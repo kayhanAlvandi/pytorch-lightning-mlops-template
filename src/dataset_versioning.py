@@ -1,8 +1,7 @@
 """Dataset versioning utilities for tracking dataset composition and code."""
 import hashlib
 import json
-from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Dict, Any, Optional
 import subprocess
 
 

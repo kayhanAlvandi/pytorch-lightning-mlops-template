@@ -1,5 +1,4 @@
 """API configuration via environment variables or defaults."""
-from pathlib import Path
 from typing import Optional
 
 from pydantic_settings import BaseSettings

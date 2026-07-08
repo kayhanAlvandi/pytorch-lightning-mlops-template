@@ -3,7 +3,6 @@ import torch
 import sys
 from pathlib import Path
 from omegaconf import ListConfig, DictConfig
-from omegaconf.base import ContainerMetadata
 
 
 def find_omegaconf_types(obj, path="", depth=0, max_depth=10):
@@ -60,7 +59,7 @@ def inspect_checkpoint(ckpt_path):
         
         # Also print structure for hyper_parameters
         if key == "hyper_parameters":
-            print(f"\n  Hyper parameters detail:")
+            print("\n  Hyper parameters detail:")
             for k, v in ckpt[key].items():
                 vtype = type(v).__module__ + "." + type(v).__qualname__
                 print(f"    {k}: type={vtype}, value={repr(v)[:200]}")
