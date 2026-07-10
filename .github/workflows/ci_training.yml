@@ -48,7 +48,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
-        uses: ./.github/actions/setup-env
+        uses: ./.github/actions/setup-env-training
       - name: Run training tests
         if: inputs.run_tests == 'training'
         run: pytest -m "training" -q

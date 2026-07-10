@@ -1,5 +1,5 @@
-name: Setup Environment
-description: Setup Python environment for testing
+name: Setup Serving Environment
+description: Setup Python environment for testing serving
 runs:
   using: composite
   steps:

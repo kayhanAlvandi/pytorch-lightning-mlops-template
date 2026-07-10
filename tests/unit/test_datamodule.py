@@ -7,6 +7,8 @@ stubbed labels provider) so the split is deterministic and balanced
 import pytest
 
 
+pytestmark = [pytest.mark.training]
+
 @pytest.fixture
 def datamodule(tiled_datamodule):
     return tiled_datamodule
