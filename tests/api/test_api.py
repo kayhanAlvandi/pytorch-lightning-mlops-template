@@ -12,8 +12,6 @@ from fastapi.testclient import TestClient
 
 import api.main as api_main
 
-pytestmark = [pytest.mark.serving]
-
 
 class FakePredictor:
     """Minimal stand-in for TilePredictor with the attributes the API reads."""
