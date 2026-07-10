@@ -10,6 +10,7 @@ on:
       - 'configs/**'
       - 'src/requirements.txt'
       - '.github/workflows/ci.yml'
+      - '.github/actions/setup-env/action.yml'
       - 'train.py'
   pull_request:
     branches: [ main ]
