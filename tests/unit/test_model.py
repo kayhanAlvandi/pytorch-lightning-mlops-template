@@ -1,10 +1,8 @@
 """Unit tests for the CNNClassifier LightningModule (forward / loss / shapes)."""
-import pytest
 import torch
 
 from src.model import CNNClassifier
 
-pytestmark = [pytest.mark.training]
 
 
 

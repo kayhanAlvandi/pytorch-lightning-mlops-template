@@ -27,4 +27,4 @@ jobs:
       - name: Set up Python
         uses: ./.github/actions/setup-env-serving
       - name: Run tests
-        run: pytest -m "serving" -q
+        run: pytest tests/api -q

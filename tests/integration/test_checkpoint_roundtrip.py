@@ -14,7 +14,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 
 from src.model import CNNClassifier
 
-pytestmark = [pytest.mark.slow, pytest.mark.integration]
+pytestmark = [pytest.mark.slow]
 
 
 def _load_checkpoint(path):

@@ -10,7 +10,7 @@ from pytorch_lightning.loggers import MLFlowLogger
 
 from src.model import CNNClassifier
 
-pytestmark = [pytest.mark.slow, pytest.mark.integration]
+pytestmark = [pytest.mark.slow]
 
 
 def test_mlflow_run_records_params_and_metrics(tiled_datamodule, tmp_path):

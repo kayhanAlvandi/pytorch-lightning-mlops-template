@@ -39,7 +39,7 @@ jobs:
       - name: Set up Python
         uses: ./.github/actions/setup-env-training
       - name: Run tests
-        run: pytest -m "training" -q
+        run: pytest tests/unit -q
   # Manual suite selection via the Actions "Run workflow" button.
   # GPU tests are excluded (no CUDA on GitHub-hosted runners); run them locally.
   test-dispatch:
@@ -51,10 +51,10 @@ jobs:
         uses: ./.github/actions/setup-env-training
       - name: Run training tests
         if: inputs.run_tests == 'training'
-        run: pytest -m "training" -q
+        run: pytest tests/unit -q
       - name: Run integration tests (CPU only)
         if: inputs.run_tests == 'integration'
-        run: pytest -m "integration and not gpu" -q
+        run: pytest tests/integration -q
       - name: Run all tests (CPU only)
         if: inputs.run_tests == 'all'
-        run: pytest -m "not serving" -q
+        run: pytest tests/unit tests/integration -q

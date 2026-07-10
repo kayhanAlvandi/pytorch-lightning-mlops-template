@@ -9,7 +9,7 @@ import pytorch_lightning as pl
 
 from src.model import CNNClassifier
 
-pytestmark = [pytest.mark.slow, pytest.mark.integration]
+pytestmark = [pytest.mark.slow]
 
 requires_cuda = pytest.mark.skipif(
     not torch.cuda.is_available(), reason="CUDA device not available"

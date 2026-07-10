@@ -12,8 +12,6 @@ from src.transforms import (
 )
 
 
-pytestmark = [pytest.mark.training]
-
 def test_build_transforms_returns_callable_and_preserves_channels(sample_chw):
     pipeline = build_transforms([
         {"name": "RandomHorizontalFlip", "p": 0.0},
