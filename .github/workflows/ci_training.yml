@@ -1,16 +1,14 @@
-name: Tests
+name: Tests-Training
 
 on:
   push:
     branches: [ main ]
     paths:
       - 'src/**'
-      - 'api/**'
-      - 'tests/**'
-      - 'configs/**'
-      - 'src/requirements.txt'
-      - '.github/workflows/ci.yml'
-      - '.github/actions/setup-env/action.yml'
+      - 'tests/unit/**'
+      - 'tests/integration/**'
+      - '.github/workflows/ci_training.yml'
+      - '.github/actions/setup-env-training/'
       - 'train.py'
   pull_request:
     branches: [ main ]
@@ -19,17 +17,17 @@ on:
       run_tests:
         description: 'Which test suite to run (CPU only; GPU tests run locally)'
         required: true
-        default: fast
+        default: training
         type: choice
         options:
-          - fast
+          - training
           - integration
           - all
 
 
 jobs:
   # Fast CPU suite: runs automatically on push and pull_request.
-  test-push: 
+  test-push-training: 
     runs-on: ubuntu-latest
     if: github.event_name == 'push' || github.event_name == 'pull_request'
     steps:
@@ -37,11 +35,11 @@ jobs:
       - name: Run ruff check
         uses: astral-sh/ruff-action@v3
         with:
-          args: check src/ train.py tests/ api/
+          args: check src/ train.py tests/unit/ tests/integration/
       - name: Set up Python
-        uses: ./.github/actions/setup-env
+        uses: ./.github/actions/setup-env-training
       - name: Run tests
-        run: pytest -m "not slow" -q
+        run: pytest -m "training" -q
   # Manual suite selection via the Actions "Run workflow" button.
   # GPU tests are excluded (no CUDA on GitHub-hosted runners); run them locally.
   test-dispatch:
@@ -51,12 +49,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: Set up Python
         uses: ./.github/actions/setup-env
-      - name: Run fast tests
-        if: inputs.run_tests == 'fast'
-        run: pytest -m "not slow" -q
+      - name: Run training tests
+        if: inputs.run_tests == 'training'
+        run: pytest -m "training" -q
       - name: Run integration tests (CPU only)
         if: inputs.run_tests == 'integration'
         run: pytest -m "integration and not gpu" -q
       - name: Run all tests (CPU only)
         if: inputs.run_tests == 'all'
-        run: pytest -m "not gpu" -q
+        run: pytest -m "not serving" -q

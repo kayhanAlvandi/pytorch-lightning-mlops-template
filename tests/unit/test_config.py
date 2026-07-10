@@ -4,6 +4,7 @@ These catch broken YAML / bad defaults early without running training.
 """
 from pathlib import Path
 
+import pytest
 import torch
 from hydra import compose, initialize_config_dir
 from hydra.core.global_hydra import GlobalHydra
@@ -13,6 +14,7 @@ from src.transforms import build_transforms
 
 CONFIG_DIR = str(Path(__file__).resolve().parents[2] / "configs")
 
+pytestmark = [pytest.mark.training]
 
 def _compose(overrides=None):
     GlobalHydra.instance().clear()

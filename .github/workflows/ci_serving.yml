@@ -1,0 +1,31 @@
+name: Tests-Serving
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'api/**'
+      - 'tests/api/**'
+      - '.github/workflows/ci_serving.yml'
+      - '.github/actions/setup-env-serving/'
+      - 'api/requirements.txt'
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+
+jobs:
+  # Fast CPU suite: runs automatically on push and pull_request.
+  test-push-serving: 
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run ruff check
+        uses: astral-sh/ruff-action@v3
+        with:
+          args: check api/ tests/api/
+      - name: Set up Python
+        uses: ./.github/actions/setup-env-serving
+      - name: Run tests
+        run: pytest -m "serving" -q

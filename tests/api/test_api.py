@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 
 import api.main as api_main
 
-pytestmark = [pytest.mark.integration]
+pytestmark = [pytest.mark.serving]
 
 
 class FakePredictor:

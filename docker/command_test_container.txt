@@ -1,0 +1,22 @@
+## test command for training from inside container
+
+python train.py dataset_name=4wells_per_label_16samples_morecache \
+    model=vit_small \
+    callbacks=finetune_auto_vit \
+    trainer=trainer_container \
+    trainer.max_epochs=1 \
+    optimizer=adamw_cosine \
+    datamodule.dataset.root_dir=/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp03-CP-40X-bin1X1_20230831_143904/MIG-Exp03-CP-40X-bin1X1 \
+    run_name=test_container
+
+## example command for training from outside container
+make train-run \
+CMD="python train.py \
+    dataset_name=4wells_per_label_16samples_morecache \
+    model=vit_small \
+    callbacks=finetune_auto_vit \
+    trainer=trainer_container \
+    trainer.max_epochs=1 \
+    optimizer=adamw_cosine \
+    datamodule.dataset.root_dir=/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp03-CP-40X-bin1X1_20230831_143904/MIG-Exp03-CP-40X-bin1X1 \
+    run_name=test_container_oneoff"

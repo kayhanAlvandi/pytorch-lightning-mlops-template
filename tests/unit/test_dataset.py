@@ -5,6 +5,8 @@ import torch
 from src.dataset import LabelEncoder, MultiChannelImageDataset, DummyLabelsProvider
 
 
+pytestmark = [pytest.mark.training]
+
 # ── LabelEncoder ────────────────────────────────────────────────────────────
 
 def test_label_encoder_roundtrip():
