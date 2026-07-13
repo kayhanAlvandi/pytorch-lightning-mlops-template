@@ -1,5 +1,9 @@
-name: Setup Serving Environment
-description: Setup Python environment for testing serving
+name: Setup Environment
+description: Configurable Setup Python environment
+inputs:
+  requirements_file:
+    description: 'Path to requirements file'
+    required: true
 runs:
   using: composite
   steps:
@@ -10,12 +14,12 @@ runs:
       uses: actions/cache@v4
       with:   
         path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('api/requirements.txt') }}
+        key: ${{ runner.os }}-pip-${{ hashFiles(inputs.requirements_file) }}
         restore-keys: |
           ${{ runner.os }}-pip-
     - name: Install dependencies
       shell: bash
       run: |
         python -m pip install --upgrade pip
-        pip install -r api/requirements.txt
+        pip install -r ${{ inputs.requirements_file }}
         pip install pytest pytest-cov httpx2
