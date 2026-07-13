@@ -8,7 +8,7 @@ on:
       - 'tests/api/**'
       - '.github/workflows/ci_serving.yml'
       - '.github/actions/setup-env/'
-      - 'api/requirements.txt'
+      - 'requirements/api_req.txt'
   pull_request:
     branches: [ main ]
   workflow_dispatch:
@@ -27,6 +27,6 @@ jobs:
       - name: Set up Python
         uses: ./.github/actions/setup-env
         with:
-          requirements_file: api/requirements.txt
+          requirements_file: requirements/api_req.txt
       - name: Run tests
         run: pytest tests/api -q

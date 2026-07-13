@@ -9,6 +9,7 @@ on:
       - 'tests/integration/**'
       - '.github/workflows/ci_training.yml'
       - '.github/actions/setup-env/'
+      - 'requirements/training_req.txt'
       - 'train.py'
   pull_request:
     branches: [ main ]
@@ -39,7 +40,7 @@ jobs:
       - name: Set up Python
         uses: ./.github/actions/setup-env
         with:
-          requirements_file: src/requirements.txt
+          requirements_file: requirements/training_req.txt
       - name: Run tests
         run: pytest tests/unit -q
   # Manual suite selection via the Actions "Run workflow" button.
@@ -52,7 +53,7 @@ jobs:
       - name: Set up Python
         uses: ./.github/actions/setup-env
         with:
-          requirements_file: src/requirements.txt
+          requirements_file: requirements/training_req.txt
       - name: Run training tests
         if: inputs.run_tests == 'training'
         run: pytest tests/unit -q
