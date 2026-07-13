@@ -6,8 +6,8 @@ LABEL description="FastAPI service for image classification with PyTorch Lightni
 
 WORKDIR /app
 
-COPY api/requirements.txt .
-RUN pip install --no-cache-dir --break-system-packages -r requirements.txt
+COPY requirements/api_req.txt .
+RUN pip install --no-cache-dir --break-system-packages -r api_req.txt
 
 COPY api/ ./api/
 

@@ -5,8 +5,8 @@ LABEL description="Training environment for image classification with PyTorch Li
 
 WORKDIR /workspace
 
-COPY src/requirements.txt .
-RUN pip install --no-cache-dir --break-system-packages -r requirements.txt
+COPY requirements/training_req.txt .
+RUN pip install --no-cache-dir --break-system-packages -r training_req.txt
 
 # install tools in container startup
 RUN echo '#!/bin/bash\npip install -e /workspace/tools 2>/dev/null\nexec "$@"' > /entrypoint.sh && chmod +x /entrypoint.sh
