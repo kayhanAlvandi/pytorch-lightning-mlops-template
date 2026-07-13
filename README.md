@@ -13,6 +13,8 @@ The template ships with a working multi-channel microscopy classifier as a refer
 - **Dataset versioning**: content-hashed dataset version, manifest, and metadata logged per run for reproducibility.
 - **FastAPI** serving that loads a model directly from MLflow (by registered name or run name) and performs tiled inference with majority voting.
 - **Docker Compose** stacks for MLflow, GPU training, and the API, orchestrated via a `Makefile`.
+- **CI / CD**: split GitHub Actions workflows for training and serving, with ruff linting, pip caching via a reusable composite action, and manual dispatch for integration tests.
+- **Layered test suite**: unit, integration, and API tests with pytest markers (`slow`, `gpu`), synthetic fixtures, and a `Makefile` for local convenience.
 - A model zoo of ready-to-use configs: `simplecnn`, `resnet18/50`, `efficientnet_b0/b3`, `vit_small/base` (+ fine-tune variants).
 
 ## Project Structure
@@ -36,10 +38,31 @@ pytorch-lightning-mlops-template/
 │   ├── callbacks.py            # Custom callbacks (e.g. LogBestModelToMLflow)
 │   └── dataset_versioning.py   # Dataset hashing, manifest, git tracking
 ├── api/                        # FastAPI serving layer (loads model from MLflow)
-├── docker/                     # Dockerfiles, compose files, Makefile
-├── tests/                      # Checkpoint / hparams tests
+├── requirements/
+│   ├── training_req.txt        # Training dependencies (torch, lightning, hydra, mlflow, …)
+│   └── api_req.txt             # Serving dependencies (fastapi, uvicorn, mlflow, …)
+├── docker/
+│   ├── Dockerfile.training     # GPU training container (PyTorch + CUDA)
+│   ├── Dockerfile.api          # FastAPI serving container (PyTorch + CUDA)
+│   ├── Dockerfile.mlflow       # MLflow tracking server
+│   ├── Docker-compose.*.yaml   # Compose stacks (mlflow, training, api)
+│   └── makefile                # Orchestration targets
+├── tests/
+│   ├── unit/                   # Fast, isolated tests (transforms, dataset, model, …)
+│   ├── integration/            # End-to-end tests (training smoke, checkpoint, MLflow)
+│   ├── api/                    # FastAPI endpoint tests via TestClient
+│   ├── diagnostics/            # Old exploratory scripts (excluded from collection)
+│   ├── conftest.py             # Shared fixtures (synthetic images, tiled_datamodule)
+│   └── Makefile                # Local test-runner shortcuts
+├── .github/
+│   ├── workflows/
+│   │   ├── ci_training.yml     # CI for training code (unit + integration)
+│   │   └── ci_serving.yml      # CI for API code
+│   └── actions/setup-env/      # Reusable composite action (Python + pip cache)
+├── scripts/                    # Utility scripts (compare MLflow runs, etc.)
 ├── benchmarks/                 # Dataloader & model benchmarks
 ├── train.py                    # Hydra entrypoint for training
+├── pytest.ini                  # Pytest config (markers, norecursedirs)
 ├── MLFLOW_GUIDE.md             # MLflow usage guide
 └── README.md
 ```
@@ -57,8 +80,14 @@ conda activate tools  # reactivate to apply
 
 ### 2. Install dependencies
 
+Dependencies are split by concern under `requirements/`:
+
 ```bash
-pip install -r src/requirements.txt
+# Training
+pip install -r requirements/training_req.txt
+
+# Serving (API)
+pip install -r requirements/api_req.txt
 ```
 
 ## Configuration (Hydra)
@@ -133,9 +162,61 @@ set API_MODEL_NAME=SimpleCNN/latest
 uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
+## Testing
+
+The test suite lives under `tests/` and is organized into three layers:
+
+| Directory | Purpose |
+| --- | --- |
+| `tests/unit/` | Fast, isolated tests (transforms, dataset, model, datamodule, config) |
+| `tests/integration/` | End-to-end tests (training smoke, checkpoint round-trip, MLflow logging) |
+| `tests/api/` | FastAPI endpoint tests via `TestClient` |
+| `tests/diagnostics/` | Old exploratory scripts — **excluded** from collection |
+
+### Markers
+
+Registered in `pytest.ini`:
+
+- **`slow`** — heavier tests.
+- **`gpu`** — require a CUDA device (auto-skipped when unavailable).
+
+### Running tests locally
+
+Convenience `make` targets are available in `tests/Makefile`:
+
+```bash
+cd tests
+make test-fast          # unit + API (no slow/GPU)
+make test-integration   # integration on CPU
+make test-all           # everything except GPU
+make gpu-test           # GPU tests (run on a CUDA machine)
+```
+
+Or run directly:
+
+```bash
+pytest tests/unit -q                  # unit tests only
+pytest tests/integration -q           # integration tests
+pytest tests/api -q                   # API tests
+pytest -m "gpu" -q                    # GPU tests
+```
+
+## CI / CD
+
+Two GitHub Actions workflows run on push / PR to `main`:
+
+| Workflow | File | Triggers on | Runs |
+| --- | --- | --- | --- |
+| **Tests-Training** | `ci_training.yml` | `src/`, `tests/unit/`, `tests/integration/`, `train.py` | ruff lint → unit tests (push); dispatch: training / integration / all |
+| **Tests-Serving** | `ci_serving.yml` | `api/`, `tests/api/` | ruff lint → API tests |
+
+Both workflows use a **reusable composite action** (`.github/actions/setup-env/`) that accepts a `requirements_file` input, sets up Python 3.11, caches pip, and installs dependencies.
+
+**GPU tests** are excluded from CI (GitHub-hosted runners have no GPU). Run them locally on a CUDA machine before merging.
+
 ## Docker
 
-Reproducible stacks are defined under `docker/` and orchestrated via the `Makefile` (run from the `docker/` directory):
+Reproducible stacks are defined under `docker/` and orchestrated via the `makefile` (run from the `docker/` directory):
 
 ```bash
 make mlflow      # start the MLflow tracking server (prerequisite)
@@ -148,9 +229,13 @@ make down-all    # stop all services
 
 Services:
 
-- **mlflow** — tracking server (SQLite backend, artifact store) on port `5000`.
-- **training** — GPU-enabled one-off training container.
-- **api** — FastAPI serving container on port `8000`.
+| Service | Image base | Port | Description |
+| --- | --- | --- | --- |
+| **mlflow** | `python:3.11-slim` | `5000` | Tracking server (SQLite backend, artifact store) |
+| **training** | `pytorch/pytorch:2.10.0-cuda12.6-cudnn9-runtime` | — | GPU-enabled one-off training container |
+| **api** | `pytorch/pytorch:2.12.0-cuda12.6-cudnn9-runtime` | `8000` | FastAPI serving container (GPU-enabled) |
+
+Environment variables are configured via `.env.*` files under `docker/` (see `.env.*.example` for templates).
 
 ## Using This Template
 

@@ -6,7 +6,7 @@ selected with pytest markers, so CI and local runs can target subsets.
 ## Layout
 
 - `tests/unit/` — fast, isolated tests (transforms, dataset, model, datamodule, config).
-- `tests/integration/` — end-to-end tests (training smoke, checkpoint round-trip, MLflow, GPU).
+- `tests/integration/` — end-to-end tests (training smoke, checkpoint round-trip, MLflow).
 - `tests/api/` — FastAPI endpoint tests via `TestClient`.
 - `tests/diagnostics/` — old exploratory scripts, **excluded** from collection (see `norecursedirs` in `pytest.ini`).
 - `tests/conftest.py` — shared fixtures (synthetic images, `tiled_datamodule`, etc.).
@@ -15,8 +15,7 @@ selected with pytest markers, so CI and local runs can target subsets.
 
 Registered in `pytest.ini`:
 
-- `slow` — heavier tests (training, checkpoints, MLflow).
-- `integration` — end-to-end tests.
+- `slow` — heavier tests.
 - `gpu` — require a CUDA device (auto-skipped when unavailable).
 
 ## Running
@@ -27,25 +26,28 @@ Requires `pytest`, `pytest-cov`, and `httpx` (for the API `TestClient`):
 pip install pytest pytest-cov httpx
 ```
 
-Common invocations (also available as `make` targets):
+Common invocations (also available as `make` targets from `tests/`):
 
 | Command | Make target | What runs |
 | --- | --- | --- |
-| `pytest -m "not slow" -q` | `make test-fast` | unit + API (the CI push suite) |
-| `pytest -m "integration and not gpu" -q` | `make test-integration` | integration on CPU |
+| `pytest tests/unit -q` | `make test-fast` | unit tests (no slow/GPU) |
+| `pytest tests/integration -q` | `make test-integration` | integration on CPU |
 | `pytest -m "not gpu" -q` | `make test-all` | everything except GPU |
 | `pytest -m "gpu" -q` | `make gpu-test` | GPU tests (CUDA machine) |
 
-## CI vs. GPU
+## CI
 
-`.github/workflows/ci.yml` runs on GitHub-hosted (CPU) runners:
+Two separate workflows run on push / PR to `main`:
 
-- **push / pull_request** → `pytest -m "not slow"` (fast suite).
-- **Manual "Run workflow"** → choose `fast`, `integration`, or `all` (all CPU-only; GPU excluded).
+| Workflow | File | Scope |
+| --- | --- | --- |
+| **Tests-Training** | `ci_training.yml` | `src/`, `tests/unit/`, `tests/integration/`, `train.py` — ruff lint + unit tests (push); dispatch: training / integration / all |
+| **Tests-Serving** | `ci_serving.yml` | `api/`, `tests/api/` — ruff lint + API tests |
 
-GitHub-hosted runners have **no GPU**, and self-hosted runners are unsafe on a
-public repo, so **GPU tests are a local pre-merge check**. Run them on your
-CUDA machine before merging:
+Both use a **reusable composite action** (`.github/actions/setup-env/`) that accepts a `requirements_file` input, sets up Python 3.11, caches pip, and installs dependencies.
+
+GitHub-hosted runners have **no GPU**, so **GPU tests are a local pre-merge check**.
+Run them on your CUDA machine before merging:
 
 ```bash
 pytest -m "gpu" -q   # or: make gpu-test
