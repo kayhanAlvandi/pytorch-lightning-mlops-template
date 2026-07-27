@@ -1,8 +1,8 @@
 services:
   api:
     build:
-      context: ..
-      dockerfile: docker/Dockerfile.api
+      context: ../../..
+      dockerfile: docker/services/api/Dockerfile
     image: image_classifier_api
     container_name: image_classifier_api
     env_file: .env.api
@@ -11,8 +11,6 @@ services:
     volumes:
       - ${O_DRIVE_PATH}:/mnt/O:rw
     restart: unless-stopped
-    depends_on:
-      - mlflow
     deploy:
       resources:
         reservations:
@@ -20,3 +18,9 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+    networks:
+      - ml-platform
+
+networks:
+  ml-platform:
+    external: true

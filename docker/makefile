@@ -1,24 +1,26 @@
-# Makefile
+# Makefile — independent services connected via external Docker network
 
-# Start MLflow (prerequisite for training)
-mlflow:
-	docker compose -f Docker-compose.mlflow.yaml up -d
+# ── Network (shared by all services/jobs) ────────────────────────────────
+network:
+	-docker network create ml-platform
 
-# Run a training job (one-off, container exits when done)
-train:
-	docker compose -f Docker-compose.mlflow.yaml -f Docker-compose.training.yaml run --rm training
+# ── Services (long-running) ──────────────────────────────────────────────
+mlflow: network
+	docker compose -f services/mlflow/docker-compose.yaml up -d
 
-# Run training with custom config override
+serve: network
+	docker compose -f services/api/docker-compose.yaml up -d
+
+# ── Jobs (ephemeral, run-and-exit) ───────────────────────────────────────
 # Usage: make train-run CMD="python train.py trainer=trainer_container model=vit_large"
-train-run:
-	docker compose -f Docker-compose.mlflow.yaml -f Docker-compose.training.yaml run --rm training $(CMD)
+train-run: network
+	docker compose -f jobs/train/docker-compose.yaml run --rm training $(CMD)
 
-# Serving
-serve:
-	docker compose -f Docker-compose.mlflow.yaml -f Docker-compose.api.yaml up -d
+# ── Teardown (each is independent — won't affect others) ─────────────────
+down-mlflow:
+	docker compose -f services/mlflow/docker-compose.yaml down
 
-down:
-	docker compose -f Docker-compose.mlflow.yaml -f Docker-compose.api.yaml down
+down-serve:
+	docker compose -f services/api/docker-compose.yaml down
 
-down-all:
-	docker compose -f Docker-compose.mlflow.yaml -f Docker-compose.training.yaml -f Docker-compose.api.yaml down
+down-all: down-serve down-mlflow

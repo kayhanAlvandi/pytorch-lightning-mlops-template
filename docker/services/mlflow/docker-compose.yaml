@@ -1,8 +1,8 @@
 services:
   mlflow:
     build:
-      context: ..
-      dockerfile: docker/Dockerfile.mlflow
+      context: ../../..
+      dockerfile: docker/services/mlflow/Dockerfile
     container_name: mlflow_server
     command: >
               mlflow server
@@ -15,6 +15,12 @@ services:
     ports:
       - "5000:5000"
     volumes:
-      - ../mlflow.db:/mlflow.db
-      - ../mlruns:/mlruns
+      - ../../../mlflow.db:/mlflow.db
+      - ../../../mlruns:/mlruns
     restart: unless-stopped
+    networks:
+      - ml-platform
+
+networks:
+  ml-platform:
+    external: true

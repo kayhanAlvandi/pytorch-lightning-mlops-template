@@ -13,4 +13,3 @@ RUN echo '#!/bin/bash\npip install -e /workspace/tools 2>/dev/null\nexec "$@"' >
 ENTRYPOINT ["/entrypoint.sh"]
 
 CMD ["python", "train.py"]
-#CMD ["sleep", "infinity"]
