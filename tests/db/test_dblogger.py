@@ -7,8 +7,9 @@ Set the DB_TEST_URI environment variable to point to your test database, e.g.:
     DB_TEST_URI=postgresql://postgres:postgres@localhost:5432/image_classifier_test
 """
 import os
-import pytest
+
 import psycopg
+import pytest
 
 from database.dblogger import DBLogger
 from utils.filename_parser import clean_image_metadata, clean_tiles_metadata

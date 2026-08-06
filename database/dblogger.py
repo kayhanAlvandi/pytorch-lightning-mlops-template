@@ -17,7 +17,6 @@ class DBLogger:
                 (plate, well, field, channel, root_path, file_name, shape_x, shape_y)
         """
 
-        ## TODO: change to multi-row insert
         for attempt in range(2): # try once, reconnect and retry once
             try:
                 with self.connection.cursor() as cursor:
@@ -36,7 +35,7 @@ class DBLogger:
                 print("DB connection lost, reconnecting...")
                 self.connection = psycopg.connect(self.db_uri)
         return None
-    
+
     def log_tile_stack(self, tile_stack_metadata: list[tuple]):
         """Insert tile stack metadata rows into the database.
 
@@ -44,7 +43,6 @@ class DBLogger:
             tile_stack_metadata: list of tuples, each:
                 (stack_hash, row_ind, col_ind, x_left, y_top, crop_size)
         """
-        ## TODO: change to multi-row insert
         for attempt in range(2): # try once, reconnect and retry once
             try:
                 with self.connection.cursor() as cursor:
@@ -70,7 +68,6 @@ class DBLogger:
             tile_stack_members: list of tuples, each:
                 (tile_stack_id, img_id)
         """
-        ## TODO: change to multi-row insert
         for attempt in range(2): # try once, reconnect and retry once
             try:
                 with self.connection.cursor() as cursor:
@@ -79,11 +76,11 @@ class DBLogger:
                     VALUES (%s, %s) ON CONFLICT (tile_stack_id, image_id) DO NOTHING
                 """, tile_stack_members)
                     self.connection.commit()
-                    return None
+                    return
             except psycopg.OperationalError:
                 print("DB connection lost, reconnecting...")
                 self.connection = psycopg.connect(self.db_uri)
-        return None
+        return
     
     def log_image_prediction(self, image_prediction: tuple):
         """Insert image prediction row into the database.
@@ -92,7 +89,6 @@ class DBLogger:
             image_prediction: tuple, each:
                 (plate, well, field, run_id, p_label, t_label, total_tiles, vote_fraction, avg_confidence)
         """
-        ## TODO: change to multi-row insert
         for attempt in range(2): # try once, reconnect and retry once
             try:
                 with self.connection.cursor() as cursor:
@@ -116,7 +112,6 @@ class DBLogger:
             tile_predictions: list of tuples, each:
                 (image_pred_id, tile_stack_id, run_id, p_label, t_label, confidence)
         """
-        ## TODO: change to multi-row insert
         for attempt in range(2): # try once, reconnect and retry once
             try:
                 with self.connection.cursor() as cursor:
@@ -125,9 +120,9 @@ class DBLogger:
                     VALUES (%s, %s, %s, %s, %s, %s)
                 """, tile_predictions)
                 self.connection.commit()
-                return None
+                return
             except psycopg.OperationalError:
                 print("DB connection lost, reconnecting...")
                 self.connection = psycopg.connect(self.db_uri)
-        return None
+        return
     
