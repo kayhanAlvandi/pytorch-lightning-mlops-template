@@ -151,12 +151,6 @@ class TestLogImageMetadata:
         well_a = "K07"
         well_b = "K08"
 
-        filenames_a = [
-            f"{PLATE}_{well_a}_T0001F001L01A01Z01C0{ch}.jxl" for ch in range(1, 6)
-        ]
-        filenames_b = [
-            f"{PLATE}_{well_b}_T0001F001L01A01Z01C0{ch}.jxl" for ch in range(1, 6)
-        ]
         # channels 3,4,5 of well_a == channels 3,4,5 of well_b only if same well;
         # wells differ so all 10 are distinct filenames — use same well to get real overlap:
         shared = [
