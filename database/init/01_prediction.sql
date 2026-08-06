@@ -1,3 +1,4 @@
+
 -- SCHEMA: prediction database
 
 -- ── Single-channel image file ────────────────────────────────────────────
@@ -13,18 +14,6 @@ CREATE TABLE IF NOT EXISTS image_metadata (
     shape_y INTEGER NOT NULL
 );
 
--- ── Single-channel crop from one image ───────────────────────────────────
-CREATE TABLE IF NOT EXISTS tile_metadata (
-    id SERIAL PRIMARY KEY,
-    image_id INTEGER REFERENCES image_metadata(id),
-    row_ind INTEGER NOT NULL,
-    col_ind INTEGER NOT NULL,
-    x_left INTEGER NOT NULL,
-    y_top INTEGER NOT NULL,
-    crop_size INTEGER NOT NULL,
-    UNIQUE (image_id, x_left, y_top, crop_size)
-);
-
 -- ══════════════════════════════════════════════════════════════════════════
 -- STACKS (multi-channel groupings that predictions run on)
 -- ══════════════════════════════════════════════════════════════════════════
@@ -32,7 +21,7 @@ CREATE TABLE IF NOT EXISTS tile_metadata (
 -- ── Multi-channel tile stack ─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS tile_stack (
     id SERIAL PRIMARY KEY,
-    stack_hash VARCHAR(64) NOT NULL UNIQUE,   -- hash of sorted member tile_metadata ids
+    stack_hash VARCHAR(64) NOT NULL UNIQUE,   -- hash of hash(sorted(image_ids) + (x_left, y_top, crop_size))
     row_ind INTEGER NOT NULL,
     col_ind INTEGER NOT NULL,
     x_left INTEGER NOT NULL,
@@ -44,8 +33,8 @@ CREATE TABLE IF NOT EXISTS tile_stack (
 CREATE TABLE IF NOT EXISTS tile_stack_member (
     id SERIAL PRIMARY KEY,
     tile_stack_id INTEGER REFERENCES tile_stack(id),
-    tile_id INTEGER REFERENCES tile_metadata(id),
-    UNIQUE (tile_stack_id, tile_id)
+    image_id INTEGER REFERENCES image_metadata(id),
+    UNIQUE (tile_stack_id, image_id)
 );
 
 -- ══════════════════════════════════════════════════════════════════════════
