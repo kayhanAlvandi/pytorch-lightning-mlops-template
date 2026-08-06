@@ -1,0 +1,64 @@
+name: Tests-DB
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'database/**'
+      - 'tests/db/**'
+      - '.github/workflows/ci_db.yml'
+      - '.github/actions/setup-env/'
+      - 'requirements/db_req.txt'
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+
+jobs:
+  # Fast CPU suite: runs automatically on push and pull_request.
+  test-push-db:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        db_user: [admin]
+        db_pass: [admin123456]
+        db_host: [localhost]
+        db_port: [5432]
+        db_name: [test]
+    env:
+      DB_USER: ${{ matrix.db_user }}
+      DB_PASS: ${{ matrix.db_pass }}
+      DB_HOST: ${{ matrix.db_host }}
+      DB_PORT: ${{ matrix.db_port }}
+      DB_NAME: ${{ matrix.db_name }}
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ${{ matrix.db_user }}
+          POSTGRES_PASSWORD: ${{ matrix.db_pass }}
+          POSTGRES_DB: ${{ matrix.db_name }}
+        ports:
+          - ${{ matrix.db_port }}:5432
+        options: >-
+          --health-cmd "pg_isready -U ${{ matrix.db_user }} -d ${{ matrix.db_name }}"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run ruff check
+        uses: astral-sh/ruff-action@v3
+        with:
+          args: check database/ tests/db/
+      - name: Set up Python
+        uses: ./.github/actions/setup-env
+        with:
+          python-version: '3.11'
+          requirements-file: 'requirements/db_req.txt'
+      - name: Run pytest
+        env:
+          DB_TEST_URI: "postgresql://${{ env.DB_USER }}:${{ env.DB_PASS }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}/${{ env.DB_NAME }}"
+        run: |
+          pytest tests/db/ -v
+
