@@ -50,7 +50,8 @@ jobs:
       - name: Run ruff check
         uses: astral-sh/ruff-action@v3
         with:
-          args: check database/ tests/db/
+          args: check
+          src: "database/ tests/db/"
       - name: Set up Python
         uses: ./.github/actions/setup-env
         with:
