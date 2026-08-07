@@ -23,7 +23,8 @@ jobs:
       - name: Run ruff check
         uses: astral-sh/ruff-action@v3
         with:
-          args: check api/ tests/api/
+          args: check
+          src: "api/ tests/api/"
       - name: Set up Python
         uses: ./.github/actions/setup-env
         with:
