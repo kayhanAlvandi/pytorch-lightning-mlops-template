@@ -55,7 +55,7 @@ jobs:
       - name: Set up Python
         uses: ./.github/actions/setup-env
         with:
-          requirements-file: requirements/db_req.txt
+          requirements_file: requirements/db_req.txt
       - name: Run pytest
         env:
           DB_TEST_URI: "postgresql://${{ env.DB_USER }}:${{ env.DB_PASS }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}/${{ env.DB_NAME }}"
