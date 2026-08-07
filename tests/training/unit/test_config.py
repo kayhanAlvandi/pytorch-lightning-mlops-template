@@ -11,7 +11,7 @@ from omegaconf import OmegaConf
 
 from src.transforms import build_transforms
 
-CONFIG_DIR = str(Path(__file__).resolve().parents[2] / "configs")
+CONFIG_DIR = str(Path(__file__).resolve().parents[3] / "configs")
 
 def _compose(overrides=None):
     GlobalHydra.instance().clear()
