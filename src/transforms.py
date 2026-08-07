@@ -7,13 +7,12 @@ Sample-level transforms are composed into a pipeline via ``build_transforms()``.
 Batch-level transforms (Mixup, CutMix) operate on (B, C, H, W) batches and
 are applied inside the training loop, not per-sample.
 """
-from typing import Callable, Dict, List, Optional, Tuple
+from collections.abc import Callable
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+from torch import nn
 from torchvision.transforms import v2
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Spatial transforms
@@ -200,8 +199,8 @@ class RandomBrightnessContrast(nn.Module):
     
     def __init__(
         self,
-        brightness_range: Tuple[float, float] = (0.8, 1.2),
-        contrast_range: Tuple[float, float] = (0.8, 1.2),
+        brightness_range: tuple[float, float] = (0.8, 1.2),
+        contrast_range: tuple[float, float] = (0.8, 1.2),
         p: float = 0.5,
     ):
         super().__init__()
@@ -235,8 +234,8 @@ class RandomErasing(nn.Module):
     def __init__(
         self,
         p: float = 0.5,
-        scale: Tuple[float, float] = (0.02, 0.2),
-        ratio: Tuple[float, float] = (0.3, 3.3),
+        scale: tuple[float, float] = (0.02, 0.2),
+        ratio: tuple[float, float] = (0.3, 3.3),
         value: str = "zero",
     ):
         super().__init__()
@@ -256,8 +255,8 @@ class RandomErasing(nn.Module):
             target_area = torch.empty(1).uniform_(*self.scale).item() * area
             aspect = torch.empty(1).uniform_(*self.ratio).item()
             
-            h = int(round((target_area * aspect) ** 0.5))
-            w = int(round((target_area / aspect) ** 0.5))
+            h = round((target_area * aspect) ** 0.5)
+            w = round((target_area / aspect) ** 0.5)
             
             if h < H and w < W:
                 top = torch.randint(0, H - h, (1,)).item()
@@ -290,7 +289,7 @@ class Compose(nn.Module):
 
 
 # Registry of all available transform classes (short name -> class)
-TRANSFORM_REGISTRY: Dict[str, type] = {
+TRANSFORM_REGISTRY: dict[str, type] = {
     "RandomCrop": RandomCrop,
     "CenterCrop": CenterCrop,
     "RandomHorizontalFlip": RandomHorizontalFlip,
@@ -304,7 +303,7 @@ TRANSFORM_REGISTRY: Dict[str, type] = {
 }
 
 
-def build_transforms(transforms_cfg: List[Dict]) -> Compose:
+def build_transforms(transforms_cfg: list[dict]) -> Compose:
     """Build a Compose pipeline from a list of transform configs.
     
     Each config dict has a "name" key (looked up in TRANSFORM_REGISTRY)
@@ -347,7 +346,7 @@ def build_transforms(transforms_cfg: List[Dict]) -> Compose:
 # Batch-level transforms (Mixup / CutMix) — uses torchvision.transforms.v2
 # ═══════════════════════════════════════════════════════════════════════════
 
-def build_batch_transform(cfg: Optional[Dict] = None):
+def build_batch_transform(cfg: dict | None = None):
     """Build a batch-level transform from config using torchvision v2.
     
     Uses v2.CutMix, v2.MixUp, and v2.RandomChoice from torchvision.

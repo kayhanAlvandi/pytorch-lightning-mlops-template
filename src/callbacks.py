@@ -1,13 +1,12 @@
 """Custom PyTorch Lightning callbacks."""
 from pathlib import Path
-from typing import List, Optional
 
+import mlflow
 import torch
+from mlflow.models import infer_signature
 from pytorch_lightning.callbacks import Callback, ModelCheckpoint
 from pytorch_lightning.loggers import MLFlowLogger
-from pytorch_lightning.utilities import rank_zero_only, rank_zero_info
-import mlflow
-from mlflow.models import infer_signature
+from pytorch_lightning.utilities import rank_zero_info, rank_zero_only
 
 
 class LogBestModelToMLflow(Callback):
@@ -24,16 +23,16 @@ class LogBestModelToMLflow(Callback):
     ) -> None:
         self.artifact_path = artifact_path
         self.logged = False
-        self._example_input: Optional[torch.Tensor] = None
+        self._example_input: torch.Tensor | None = None
 
-    def _get_checkpoint_callback(self, trainer) -> Optional[ModelCheckpoint]:
+    def _get_checkpoint_callback(self, trainer) -> ModelCheckpoint | None:
         """Find ModelCheckpoint callback from trainer."""
         for cb in trainer.callbacks:
             if isinstance(cb, ModelCheckpoint):
                 return cb
         return None
 
-    def _get_mlflow_logger(self, trainer) -> Optional[MLFlowLogger]:
+    def _get_mlflow_logger(self, trainer) -> MLFlowLogger | None:
         """Find MLFlowLogger from trainer."""
         for logger in trainer.loggers:
             if isinstance(logger, MLFlowLogger):
@@ -184,7 +183,7 @@ class LogBestModelToMLflow(Callback):
                     client.set_model_version_tag(registered_model_name, model_version, "base_channels", str(hp.get('base_channels', '?')))
                     client.set_model_version_tag(registered_model_name, model_version, "channel_multiplier", str(hp.get('channel_multiplier', '?')))
                     client.set_model_version_tag(registered_model_name, model_version, "hidden_dim", str(hp.get('hidden_dim', '?')))
-            except Exception as tag_err:
+            except Exception as tag_err:  # noqa: BLE001
                 rank_zero_info(f"LogBestModelToMLflow: Could not set model version description/tags: {tag_err}")
             
             self.logged = True
@@ -323,7 +322,7 @@ class AutoGradualUnfreezing(Callback):
     
     def __init__(
         self,
-        unfreeze_stages: List[int],
+        unfreeze_stages: list[int],
         monitor: str = "val/loss",
         patience: int = 5,
         min_delta: float = 0.001,
@@ -482,7 +481,7 @@ class GradualUnfreezing(Callback):
                           Must be sorted by epoch ascending.
     """
     
-    def __init__(self, unfreeze_schedule: List[List[int]]):
+    def __init__(self, unfreeze_schedule: list[list[int]]):
         super().__init__()
         # Sort by epoch to be safe
         self.schedule = sorted(unfreeze_schedule, key=lambda x: x[0])

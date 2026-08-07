@@ -3,12 +3,12 @@ import pytest
 import torch
 
 from src.transforms import (
-    build_transforms,
-    RandomHorizontalFlip,
-    RandomVerticalFlip,
-    RandomCrop,
     CenterCrop,
     Normalize,
+    RandomCrop,
+    RandomHorizontalFlip,
+    RandomVerticalFlip,
+    build_transforms,
 )
 
 

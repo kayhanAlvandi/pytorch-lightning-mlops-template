@@ -4,8 +4,8 @@ Marked slow/integration so it can be excluded from the fast CI path with
 ``pytest -m "not slow"``.
 """
 import pytest
-import torch
 import pytorch_lightning as pl
+import torch
 
 from src.model import CNNClassifier
 

@@ -1,11 +1,11 @@
 """Dataset versioning utilities for tracking dataset composition and code."""
 import hashlib
 import json
-from typing import Dict, Any, Optional
 import subprocess
+from typing import Any
 
 
-def get_git_commit_for_model_files() -> Optional[str]:
+def get_git_commit_for_model_files() -> str | None:
     """Get the last git commit hash that modified model-related files."""
     model_files = [
         'src/model.py',
@@ -34,7 +34,7 @@ def check_model_uncommitted_changes() -> bool:
         return False
 
 
-def get_git_commit_for_dataset_files() -> Optional[str]:
+def get_git_commit_for_dataset_files() -> str | None:
     """Get the last git commit hash that modified dataset-related files."""
     dataset_files = [
         'src/dataset.py',
@@ -72,13 +72,13 @@ def check_uncommitted_changes() -> bool:
         return False
 
 
-def compute_config_hash(config_dict: Dict[str, Any]) -> str:
+def compute_config_hash(config_dict: dict[str, Any]) -> str:
     """Compute hash of the datamodule configuration dict."""
     config_str = json.dumps(config_dict, sort_keys=True, default=str)
     return hashlib.md5(config_str.encode()).hexdigest()
 
 
-def compute_dataset_version(config_dict: Dict[str, Any]) -> str:
+def compute_dataset_version(config_dict: dict[str, Any]) -> str:
     """
     Compute dataset version from git commit + config.
     
@@ -107,7 +107,7 @@ def create_dataset_metadata(
     config,
     train_samples: int,
     val_samples: int,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Create comprehensive dataset metadata for MLflow logging.
     
@@ -130,7 +130,7 @@ def create_dataset_metadata(
         for sample in datamodule.train_dataset.samples:
             if isinstance(sample, dict) and ('plate' in sample) and ('well' in sample):
                 wells_set.add(f"{sample['plate']}/{sample['well']}")
-        wells_used = sorted(list(wells_set))
+        wells_used = sorted(wells_set)
         
         if not wells_used and len(datamodule.train_dataset.samples) > 0:
             # Debug: print first sample structure if wells_used is empty

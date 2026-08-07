@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for the image_classifier test suite.
+"""Shared pytest fixtures for the training test suite.
 
 Provides synthetic, on-disk multi-channel .tif images that match the real
 dataset filename pattern, so unit tests can exercise the dataset / datamodule
@@ -12,11 +12,11 @@ import pytest
 
 # Ensure the project root (image_classifier/) is importable so `import src...`
 # works no matter where pytest is invoked from.
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-import cv2  # noqa: E402  (import after sys.path setup)
+import cv2
 
 IMG_SIZE = 64
 CHANNELS = [1, 2, 3]
@@ -27,11 +27,6 @@ def _write_image(path: Path, size: int = IMG_SIZE, seed: int = 0) -> None:
     rng = np.random.default_rng(seed)
     img = rng.integers(0, 65535, size=(size, size), dtype=np.uint16)
     cv2.imwrite(str(path), img)
-
-
-@pytest.fixture
-def channels():
-    return list(CHANNELS)
 
 
 @pytest.fixture
@@ -94,6 +89,7 @@ def tiled_datamodule(synthetic_image_dir, balanced_labels, monkeypatch):
     and uses a small crop so each 64x64 image yields several 32x32 tiles.
     """
     from omegaconf import OmegaConf
+
     from src.datamodule import MultiChannelDataModule
 
     forced = dict(balanced_labels)

@@ -5,16 +5,16 @@ from pathlib import Path
 import hydra
 import mlflow
 import pandas as pd
-import torch
 import pytorch_lightning as pl
+import torch
 from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
 
 from src.dataset_versioning import (
-    create_dataset_metadata,
-    create_dataset_manifest,
-    get_git_commit_for_model_files,
     check_model_uncommitted_changes,
+    create_dataset_manifest,
+    create_dataset_metadata,
+    get_git_commit_for_model_files,
 )
 
 
@@ -244,7 +244,7 @@ def main(cfg: DictConfig):
             )
             mlflow.log_input(dataset, context="training")
             print(f"✓ Dataset tracked with version: {dataset_metadata['dataset_version']}")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"⚠ Warning: Could not log dataset with MLflow Dataset API: {e}")
         import traceback
         traceback.print_exc()

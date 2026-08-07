@@ -1,14 +1,13 @@
 """PyTorch Lightning DataModule for multi-channel images."""
-from typing import Dict, List, Optional
 
 import pytorch_lightning as pl
 from hydra.utils import get_class, instantiate
 from omegaconf import DictConfig, ListConfig, OmegaConf
-from torch.utils.data import DataLoader
 from sklearn.model_selection import train_test_split
+from torch.utils.data import DataLoader
 
-from .dataset import DummyLabelsProvider, MongoDBLabelsProvider, LabelEncoder
-from .transforms import build_transforms, build_batch_transform
+from .dataset import DummyLabelsProvider, LabelEncoder, MongoDBLabelsProvider
+from .transforms import build_batch_transform, build_transforms
 
 
 class MultiChannelDataModule(pl.LightningDataModule):
@@ -27,14 +26,14 @@ class MultiChannelDataModule(pl.LightningDataModule):
         dataset: DictConfig,
         train_transform: DictConfig,
         val_transform: DictConfig,
-        batch_transform: Optional[DictConfig] = None,
+        batch_transform: DictConfig | None = None,
         batch_size: int = 16,
         num_workers: int = 4,
         pin_memory: bool = True,
         train_val_split: float = 0.66,
         use_mongodb: bool = False,
-        max_wells_per_label: Optional[int] = None,
-        exclude_wells: Optional[List] = None,
+        max_wells_per_label: int | None = None,
+        exclude_wells: list | None = None,
     ):
         """
         Args:
@@ -90,7 +89,7 @@ class MultiChannelDataModule(pl.LightningDataModule):
         self.test_dataset = None
         self.label_encoder = None
         
-    def setup(self, stage: Optional[str] = None):
+    def setup(self, stage: str | None = None):
         """Setup datasets for training, validation, and testing."""
         # Get labels (string labels)
         if self.use_mongodb:
@@ -116,7 +115,7 @@ class MultiChannelDataModule(pl.LightningDataModule):
         
         self._setup_datasets(labels_dict)
     
-    def _setup_datasets(self, labels_dict: Dict):
+    def _setup_datasets(self, labels_dict: dict):
         """Setup train/val datasets using hydra.utils.instantiate().
         
         The dataset class and transforms are fully determined by config _target_ fields.
@@ -169,7 +168,7 @@ class MultiChannelDataModule(pl.LightningDataModule):
         print(f"Train: {len(train_labels)} wells -> {len(self.train_dataset)} samples")
         print(f"Val: {len(val_labels)} wells -> {len(self.val_dataset)} samples")
     
-    def _limit_wells_per_label(self, labels_dict: Dict, n_per_label: int) -> Dict:
+    def _limit_wells_per_label(self, labels_dict: dict, n_per_label: int) -> dict:
         """Limit to first N wells per label class for consistent subset.
         
         Args:

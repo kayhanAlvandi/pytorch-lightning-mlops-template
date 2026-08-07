@@ -1,6 +1,6 @@
 """Configuration management for CNN classifier using Hydra structured configs."""
 from dataclasses import dataclass, field
-from typing import List, Optional, Any
+from typing import Any
 
 from omegaconf import MISSING
 
@@ -10,11 +10,11 @@ from omegaconf import MISSING
 class TiledDatasetConfig:
     _target_: str = "src.dataset.TiledMultiChannelDataset"
     root_dir: str = MISSING
-    channels: List[int] = field(default_factory=lambda: [1, 2, 3, 4])
+    channels: list[int] = field(default_factory=lambda: [1, 2, 3, 4])
     crop_size: int = 224
-    stride: Optional[int] = None
+    stride: int | None = None
     cache_size: int = 16
-    max_samples_per_label: Optional[int] = None
+    max_samples_per_label: int | None = None
     verbose: bool = False
 
 
@@ -22,7 +22,7 @@ class TiledDatasetConfig:
 class RandomCropDatasetConfig:
     _target_: str = "src.dataset.MultiChannelImageDataset"
     root_dir: str = MISSING
-    channels: List[int] = field(default_factory=lambda: [1, 2, 3, 4])
+    channels: list[int] = field(default_factory=lambda: [1, 2, 3, 4])
     crop_size: int = 224
 
 
@@ -39,14 +39,14 @@ class DataModuleConfig:
     dataset: Any = field(default_factory=TiledDatasetConfig)
     train_transform: Any = field(default_factory=list)   # List of {name: ..., params}
     val_transform: Any = field(default_factory=list)      # List of {name: ..., params}
-    batch_transform: Optional[Any] = None                 # Batch-level (Mixup/CutMix)
+    batch_transform: Any | None = None                 # Batch-level (Mixup/CutMix)
     batch_size: int = 16
     num_workers: int = 4
     pin_memory: bool = True
     use_mongodb: bool = False
     train_val_split: float = 0.8
-    max_wells_per_label: Optional[int] = None
-    exclude_wells: Optional[Any] = None
+    max_wells_per_label: int | None = None
+    exclude_wells: Any | None = None
 
 
 # ── Model ──────────────────────────────────────────────────────────────────
@@ -127,14 +127,14 @@ class Config:
     datamodule: DataModuleConfig = field(default_factory=DataModuleConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
     optimizer: OptimizerConfig = field(default_factory=OptimizerConfig)
-    callbacks: List[Any] = field(default_factory=list)
+    callbacks: list[Any] = field(default_factory=list)
     trainer: TrainerConfig = field(default_factory=TrainerConfig)
 
     # Runtime parameters
     seed: int = 42
-    ckpt: Optional[str] = None
-    resume_from_model: Optional[str] = None
+    ckpt: str | None = None
+    resume_from_model: str | None = None
     resume_weights_only: bool = True  # If True, load only model weights (not optimizer/scheduler/epoch)
-    run_name: Optional[str] = None
-    dataset_name: Optional[str] = None
-    tags: Optional[List[str]] = None
+    run_name: str | None = None
+    dataset_name: str | None = None
+    tags: list[str] | None = None

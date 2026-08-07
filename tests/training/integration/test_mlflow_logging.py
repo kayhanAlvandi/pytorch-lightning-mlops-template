@@ -3,8 +3,8 @@
 Uses a temporary sqlite tracking DB and temp artifact dir so the real
 ``mlflow.db`` / ``mlruns`` are never touched.
 """
-import pytest
 import mlflow
+import pytest
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import MLFlowLogger
 

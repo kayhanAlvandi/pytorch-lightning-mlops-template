@@ -1,8 +1,8 @@
 """Unit tests for LabelEncoder, DummyLabelsProvider and MultiChannelImageDataset."""
-import torch
 import pytest
-from src.dataset import LabelEncoder, MultiChannelImageDataset, DummyLabelsProvider
+import torch
 
+from src.dataset import DummyLabelsProvider, LabelEncoder, MultiChannelImageDataset
 
 # ── LabelEncoder ────────────────────────────────────────────────────────────
 

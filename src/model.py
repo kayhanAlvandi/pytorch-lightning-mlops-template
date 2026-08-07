@@ -1,15 +1,15 @@
 """Simple CNN model with PyTorch Lightning."""
-from functools import partial
-from typing import Any, Dict, List, Optional
-
 import math
+from functools import partial
+from typing import Any, ClassVar
 
-import torch
-import torch.nn as nn
-import pytorch_lightning as pl
-from torchmetrics import Accuracy, F1Score, ConfusionMatrix
-import timm
 import matplotlib
+import pytorch_lightning as pl
+import timm
+import torch
+from torch import nn
+from torchmetrics import Accuracy, ConfusionMatrix, F1Score
+
 matplotlib.use('Agg')  # Use non-interactive backend for threading
 import matplotlib.pyplot as plt
 import numpy as np
@@ -110,7 +110,7 @@ class TransferLearningBackbone(nn.Module):
     """
     
     # Mapping of simple names to timm model names
-    MODEL_MAPPING = {
+    MODEL_MAPPING: ClassVar[dict[str, str]] = {
         # ResNet variants
         'resnet18': 'resnet18',
         'resnet34': 'resnet34',
@@ -227,7 +227,7 @@ class TransferLearningBackbone(nn.Module):
         
         return ordered_names, stage_params
     
-    def get_stage_names(self) -> List[str]:
+    def get_stage_names(self) -> list[str]:
         """Return ordered list of backbone stage names (stem -> deep -> neck)."""
         return list(self._stage_names)
     
@@ -241,7 +241,7 @@ class TransferLearningBackbone(nn.Module):
             param.requires_grad = False
         print(f"Backbone '{self.backbone_name}' frozen ({self.get_num_stages()} stages)")
     
-    def unfreeze_stages(self, stage_indices: List[int]):
+    def unfreeze_stages(self, stage_indices: list[int]):
         """Unfreeze specific backbone stages by index.
         
         Args:
@@ -275,7 +275,7 @@ class TransferLearningBackbone(nn.Module):
         self.unfreeze_stages(stages_to_unfreeze)
     
     def get_param_groups(self, head_lr: float, backbone_lr: float,
-                         lr_decay_factor: float = 1.0) -> List[dict]:
+                         lr_decay_factor: float = 1.0) -> list[dict]:
         """Create parameter groups with discriminative learning rates.
         
         LR decreases from deep layers to early layers using lr_decay_factor.
@@ -360,13 +360,13 @@ class BaseClassifier(pl.LightningModule):
     def __init__(
         self,
         num_classes: int,
-        criterion: Optional[nn.Module] = None,
-        optimizer: Optional[partial] = None,
-        scheduler: Optional[partial] = None,
-        criterion_config: Optional[dict] = None,
-        optimizer_config: Optional[dict] = None,
-        scheduler_config: Optional[dict] = None,
-        class_names: Optional[List[str]] = None,
+        criterion: nn.Module | None = None,
+        optimizer: partial | None = None,
+        scheduler: partial | None = None,
+        criterion_config: dict | None = None,
+        optimizer_config: dict | None = None,
+        scheduler_config: dict | None = None,
+        class_names: list[str] | None = None,
     ):
         super().__init__()
         
@@ -388,18 +388,18 @@ class BaseClassifier(pl.LightningModule):
         self.test_confmat = ConfusionMatrix(task="multiclass", num_classes=num_classes)
         
         # Store validation outputs for logging (2 images per class)
-        self._val_class_images: Dict[int, List] = {}  # class_idx -> [(image, pred, label), ...]
+        self._val_class_images: dict[int, list] = {}  # class_idx -> [(image, pred, label), ...]
         self._n_images_per_class = 2
         
         # Store test outputs for logging
-        self._test_class_images: Dict[int, List] = {}
+        self._test_class_images: dict[int, list] = {}
         
         # Gradient monitoring
         self.grad_alert_threshold = 1e5
-        self._last_batch_meta: Dict[str, Any] = {}
+        self._last_batch_meta: dict[str, Any] = {}
         
         # Batch-level transform (Mixup/CutMix) — set externally by train.py
-        self.batch_transform: Optional[nn.Module] = None
+        self.batch_transform: nn.Module | None = None
     
     @staticmethod
     def _import_class(dotpath: str):
@@ -509,9 +509,8 @@ class BaseClassifier(pl.LightningModule):
         # Cache metadata for gradient spike diagnostics
         label_counts = torch.bincount(labels.detach().cpu(), minlength=self.num_classes)
         current_lr = None
-        if self.trainer is not None and getattr(self.trainer, "optimizers", None):
-            if self.trainer.optimizers:
-                current_lr = self.trainer.optimizers[0].param_groups[0]["lr"]
+        if self.trainer is not None and getattr(self.trainer, "optimizers", None) and self.trainer.optimizers:
+            current_lr = self.trainer.optimizers[0].param_groups[0]["lr"]
         self._last_batch_meta = {
             "batch_idx": batch_idx,
             "loss": loss.detach().item(),
@@ -561,7 +560,7 @@ class BaseClassifier(pl.LightningModule):
                     if hasattr(exp, "add_scalar"):
                         exp.add_scalar("grad/alert_total_norm", total_norm, self.global_step)
     
-    def validation_step(self, batch, batch_idx) -> Dict[str, Any]:
+    def validation_step(self, batch, batch_idx) -> dict[str, Any]:
         images, labels = batch
         logits = self(images)
         loss = self.criterion(logits, labels)
@@ -627,8 +626,9 @@ class BaseClassifier(pl.LightningModule):
     def _log_figure_to_mlflow(self, fig: plt.Figure, filename: str) -> None:
         """Log a matplotlib figure to MLflow if MLflow logger is available."""
         try:
-            import tempfile
             import os
+            import tempfile
+
             from pytorch_lightning.loggers import MLFlowLogger
             
             # Find MLflow logger from trainer's loggers
@@ -649,7 +649,7 @@ class BaseClassifier(pl.LightningModule):
                         filepath, 
                         artifact_path="figures"
                     )
-        except Exception:
+        except Exception:  # noqa: BLE001, S110
             pass  # Silently skip if MLflow logging fails
     
     def _plot_confusion_matrix(self, confmat: np.ndarray, title: str = "Confusion Matrix") -> plt.Figure:
@@ -681,7 +681,7 @@ class BaseClassifier(pl.LightningModule):
         fig.tight_layout()
         return fig
     
-    def _plot_predictions(self, images: torch.Tensor, preds: torch.Tensor, labels: torch.Tensor, title: str = None) -> plt.Figure:
+    def _plot_predictions(self, images: torch.Tensor, preds: torch.Tensor, labels: torch.Tensor, title: str | None = None) -> plt.Figure:
         """Create figure with sample images and their predictions.
         
         Grid layout adapts to number of images (2 per class).
@@ -726,7 +726,7 @@ class BaseClassifier(pl.LightningModule):
         fig.tight_layout()
         return fig
     
-    def test_step(self, batch, batch_idx) -> Dict[str, Any]:
+    def test_step(self, batch, batch_idx) -> dict[str, Any]:
         images, labels = batch
         logits = self(images)
         loss = self.criterion(logits, labels)
@@ -864,18 +864,18 @@ class CNNClassifier(BaseClassifier):
         self,
         in_channels: int,
         num_classes: int,
-        criterion: Optional[nn.Module] = None,
-        optimizer: Optional[partial] = None,
-        scheduler: Optional[partial] = None,
-        criterion_config: Optional[dict] = None,
-        optimizer_config: Optional[dict] = None,
-        scheduler_config: Optional[dict] = None,
+        criterion: nn.Module | None = None,
+        optimizer: partial | None = None,
+        scheduler: partial | None = None,
+        criterion_config: dict | None = None,
+        optimizer_config: dict | None = None,
+        scheduler_config: dict | None = None,
         dropout: float = 0.5,
         num_blocks: int = 4,
         base_channels: int = 32,
         channel_multiplier: float = 2.0,
         hidden_dim: int = 128,
-        class_names: Optional[List[str]] = None,
+        class_names: list[str] | None = None,
     ):
         super().__init__(
             num_classes=num_classes,
@@ -926,20 +926,20 @@ class TransferLearningClassifier(BaseClassifier):
         backbone_name: str,
         in_channels: int,
         num_classes: int,
-        criterion: Optional[nn.Module] = None,
-        optimizer: Optional[partial] = None,
-        scheduler: Optional[partial] = None,
-        criterion_config: Optional[dict] = None,
-        optimizer_config: Optional[dict] = None,
-        scheduler_config: Optional[dict] = None,
+        criterion: nn.Module | None = None,
+        optimizer: partial | None = None,
+        scheduler: partial | None = None,
+        criterion_config: dict | None = None,
+        optimizer_config: dict | None = None,
+        scheduler_config: dict | None = None,
         pretrained: bool = True,
         freeze_backbone: bool = False,
         freeze_bn: bool = False,
         dropout: float = 0.5,
-        head_lr: Optional[float] = None,
-        backbone_lr: Optional[float] = None,
+        head_lr: float | None = None,
+        backbone_lr: float | None = None,
         lr_decay_factor: float = 1.0,
-        class_names: Optional[List[str]] = None,
+        class_names: list[str] | None = None,
     ):
         super().__init__(
             num_classes=num_classes,

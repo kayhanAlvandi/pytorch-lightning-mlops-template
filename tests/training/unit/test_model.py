@@ -4,8 +4,6 @@ import torch
 from src.model import CNNClassifier
 
 
-
-
 def _tiny_model(in_channels: int = 3, num_classes: int = 4) -> CNNClassifier:
     """A small, fast CNNClassifier for unit testing."""
     return CNNClassifier(

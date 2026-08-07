@@ -8,8 +8,8 @@ model must reproduce the original model's outputs exactly.
 from pathlib import Path
 
 import pytest
-import torch
 import pytorch_lightning as pl
+import torch
 from pytorch_lightning.callbacks import ModelCheckpoint
 
 from src.model import CNNClassifier

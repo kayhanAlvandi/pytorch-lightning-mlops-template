@@ -1,14 +1,13 @@
 """Custom Dataset for multi-channel microscopy images (JXL/TIF)."""
 import re
+from collections.abc import Callable
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Callable
 
 import cv2
 import numpy as np
 import torch
-from torch.utils.data import Dataset
 from PIL import Image
-
+from torch.utils.data import Dataset
 
 try:
     import pillow_jxl  # JXL support for PIL  # noqa: F401
@@ -23,11 +22,11 @@ class LabelEncoder:
     """
     
     def __init__(self):
-        self.label_to_idx: Dict[str, int] = {}
-        self.idx_to_label: Dict[int, str] = {}
+        self.label_to_idx: dict[str, int] = {}
+        self.idx_to_label: dict[int, str] = {}
         self._fitted = False
     
-    def fit(self, labels: List[str]) -> "LabelEncoder":
+    def fit(self, labels: list[str]) -> "LabelEncoder":
         """Fit encoder on a list of string labels."""
         unique_labels = sorted(set(labels))
         self.label_to_idx = {label: idx for idx, label in enumerate(unique_labels)}
@@ -35,18 +34,18 @@ class LabelEncoder:
         self._fitted = True
         return self
     
-    def transform(self, labels: List[str]) -> List[int]:
+    def transform(self, labels: list[str]) -> list[int]:
         """Transform string labels to integers."""
         if not self._fitted:
             raise ValueError("LabelEncoder must be fitted before transform")
         return [self.label_to_idx[label] for label in labels]
     
-    def fit_transform(self, labels: List[str]) -> List[int]:
+    def fit_transform(self, labels: list[str]) -> list[int]:
         """Fit and transform in one step."""
         self.fit(labels)
         return self.transform(labels)
     
-    def inverse_transform(self, indices: List[int]) -> List[str]:
+    def inverse_transform(self, indices: list[int]) -> list[str]:
         """Convert integer indices back to string labels."""
         return [self.idx_to_label[idx] for idx in indices]
     
@@ -64,7 +63,7 @@ class LabelEncoder:
         return len(self.label_to_idx)
     
     @property
-    def classes(self) -> List[str]:
+    def classes(self) -> list[str]:
         """Return list of class names in order."""
         return [self.idx_to_label[i] for i in range(len(self.idx_to_label))]
 
@@ -89,10 +88,10 @@ class MultiChannelImageDataset(Dataset):
     def __init__(
         self,
         root_dir: str,
-        channels: List[int],
-        labels_dict: Dict[Tuple[str, str], str],
+        channels: list[int],
+        labels_dict: dict[tuple[str, str], str],
         label_encoder: LabelEncoder,
-        transform: Optional[Callable] = None,
+        transform: Callable | None = None,
     ):
         """
         Args:
@@ -111,7 +110,7 @@ class MultiChannelImageDataset(Dataset):
         # Build list of unique samples (plate, well, field combinations)
         self.samples = self._build_sample_list()
         
-    def _build_sample_list(self) -> List[Dict]:
+    def _build_sample_list(self) -> list[dict]:
         """Build list of unique samples based on available files."""
         samples = {}
         
@@ -172,7 +171,7 @@ class MultiChannelImageDataset(Dataset):
             raise ValueError("image path should end with .tif or .jxl")
         return np.array(image_source, dtype=np.float32)
     
-    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, int]:
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, int]:
         sample = self.samples[idx]
         
         # Load all channels for this sample
@@ -212,10 +211,10 @@ class LRUImageCache:
     
     def __init__(self, max_size: int = 16):
         self.max_size = max_size
-        self.cache: Dict[str, np.ndarray] = {}
-        self.access_order: List[str] = []
+        self.cache: dict[str, np.ndarray] = {}
+        self.access_order: list[str] = []
     
-    def get(self, key: str) -> Optional[np.ndarray]:
+    def get(self, key: str) -> np.ndarray | None:
         """Get image from cache, returns None if not found."""
         if key in self.cache:
             # Move to end (most recently used)
@@ -255,14 +254,14 @@ class TiledMultiChannelDataset(Dataset):
     def __init__(
         self,
         root_dir: str,
-        channels: List[int],
-        labels_dict: Dict[Tuple[str, str], str],
+        channels: list[int],
+        labels_dict: dict[tuple[str, str], str],
         label_encoder: LabelEncoder,
         crop_size: int = 224,
-        stride: Optional[int] = None,
-        transform: Optional[Callable] = None,
+        stride: int | None = None,
+        transform: Callable | None = None,
         cache_size: int = 16,
-        max_samples_per_label: Optional[int] = None,
+        max_samples_per_label: int | None = None,
         verbose: bool = False,
     ):
         """
@@ -299,7 +298,7 @@ class TiledMultiChannelDataset(Dataset):
         # Build tile index: list of (sample_idx, row, col) for all tiles
         self.tiles = self._build_tile_index()
     
-    def _build_sample_list(self) -> List[Dict]:
+    def _build_sample_list(self) -> list[dict]:
         """Build list of unique samples based on available files."""
         samples = {}
         
@@ -357,7 +356,7 @@ class TiledMultiChannelDataset(Dataset):
         
         return valid_samples
     
-    def _balance_samples(self, samples: List[Dict]) -> List[Dict]:
+    def _balance_samples(self, samples: list[dict]) -> list[dict]:
         """Balance samples by taking max N per label with random selection.
         
         Args:
@@ -392,7 +391,7 @@ class TiledMultiChannelDataset(Dataset):
         
         return balanced
     
-    def _build_tile_index(self) -> List[Tuple[int, int, int]]:
+    def _build_tile_index(self) -> list[tuple[int, int, int]]:
         """Build index of all tiles: (sample_idx, top, left)."""
         tiles = []
         
@@ -459,7 +458,7 @@ class TiledMultiChannelDataset(Dataset):
     def __len__(self) -> int:
         return len(self.tiles)
     
-    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, int]:
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, int]:
         sample_idx, top, left = self.tiles[idx]
         sample = self.samples[sample_idx]
         
@@ -491,7 +490,7 @@ class TiledMultiChannelDataset(Dataset):
         """Total number of tiles across all samples."""
         return len(self.tiles)
     
-    def get_tiles_per_sample(self) -> List[int]:
+    def get_tiles_per_sample(self) -> list[int]:
         """Get number of tiles for each sample."""
         counts = [0] * len(self.samples)
         for sample_idx, _, _ in self.tiles:
@@ -507,17 +506,17 @@ class DummyLabelsProvider:
     """
     
     # Default class names for dummy labels
-    DEFAULT_CLASSES = ["ClassA", "ClassB", "ClassC", "ClassD"]
+    DEFAULT_CLASSES: tuple[str, ...] = ("ClassA", "ClassB", "ClassC", "ClassD")
     
-    def __init__(self, class_names: Optional[List[str]] = None, seed: int = 42):
+    def __init__(self, class_names: list[str] | None = None, seed: int = 42):
         self.class_names = class_names or self.DEFAULT_CLASSES
         self.seed = seed
     
     def get_labels(
         self,
         root_dir: str,
-        exclude_wells: Optional[List[Tuple[str, str]]] = None,
-    ) -> Dict[Tuple[str, str], str]:
+        exclude_wells: list[tuple[str, str]] | None = None,
+    ) -> dict[tuple[str, str], str]:
         """Generate dummy string labels for all plate/well combinations in directory.
         
         Args:
@@ -565,8 +564,8 @@ class MongoDBLabelsProvider:
     def get_labels(
         self,
         root_dir: str,
-        exclude_wells: Optional[List[Tuple[str, str]]] = None,
-    ) -> Dict[Tuple[str, str], str]:
+        exclude_wells: list[tuple[str, str]] | None = None,
+    ) -> dict[tuple[str, str], str]:
         """Query MongoDB for labels (returns string Treatment values).
         
         Args:
