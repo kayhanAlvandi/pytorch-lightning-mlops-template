@@ -4,19 +4,11 @@ Provides synthetic, on-disk multi-channel .tif images that match the real
 dataset filename pattern, so unit tests can exercise the dataset / datamodule
 code paths without needing the real microscopy dataset or MongoDB.
 """
-import sys
 from pathlib import Path
 
+import cv2
 import numpy as np
 import pytest
-
-# Ensure the project root (image_classifier/) is importable so `import src...`
-# works no matter where pytest is invoked from.
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
-import cv2
 
 IMG_SIZE = 64
 CHANNELS = [1, 2, 3]
