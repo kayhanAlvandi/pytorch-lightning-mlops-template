@@ -5,8 +5,7 @@ on:
     branches: [ main ]
     paths:
       - 'src/**'
-      - 'tests/unit/**'
-      - 'tests/integration/**'
+      - 'tests/training/**'
       - '.github/workflows/ci_training.yml'
       - '.github/actions/setup-env/'
       - 'requirements/training_req.txt'
@@ -36,13 +35,14 @@ jobs:
       - name: Run ruff check
         uses: astral-sh/ruff-action@v3
         with:
-          args: check src/ train.py tests/unit/ tests/integration/
+          args: check
+          src: "src/ train.py tests/training/"
       - name: Set up Python
         uses: ./.github/actions/setup-env
         with:
           requirements_file: requirements/training_req.txt
       - name: Run tests
-        run: pytest tests/unit -q
+        run: pytest tests/training/unit -q
   # Manual suite selection via the Actions "Run workflow" button.
   # GPU tests are excluded (no CUDA on GitHub-hosted runners); run them locally.
   test-dispatch:
@@ -56,10 +56,10 @@ jobs:
           requirements_file: requirements/training_req.txt
       - name: Run training tests
         if: inputs.run_tests == 'training'
-        run: pytest tests/unit -q
+        run: pytest tests/training/unit -q
       - name: Run integration tests (CPU only)
         if: inputs.run_tests == 'integration'
-        run: pytest tests/integration -q
+        run: pytest tests/training/integration -q
       - name: Run all tests (CPU only)
         if: inputs.run_tests == 'all'
-        run: pytest tests/unit tests/integration -q
+        run: pytest tests/training/unit tests/training/integration -q
