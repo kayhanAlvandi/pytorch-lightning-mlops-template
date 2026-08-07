@@ -76,6 +76,7 @@ ENV/
 .vscode/
 *.swp
 *.swo
+.devin/
 
 # PyTorch / Lightning
 logs/
@@ -108,3 +109,6 @@ Thumbs.db
 # Dataset metadata
 dataset_metadata.json
 dataset_manifest.json
+
+## ignore agents rules
+AGENTS.md
