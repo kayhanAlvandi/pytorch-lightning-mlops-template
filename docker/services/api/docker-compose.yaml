@@ -20,7 +20,10 @@ services:
               capabilities: [gpu]
     networks:
       - ml-platform
+      - pg_network
 
 networks:
   ml-platform:
+    external: true
+  pg_network:
     external: true

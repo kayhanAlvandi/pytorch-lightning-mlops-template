@@ -10,6 +10,8 @@ COPY requirements/api_req.txt .
 RUN pip install --no-cache-dir --break-system-packages -r api_req.txt
 
 COPY api/ ./api/
+COPY utils/ ./utils/
+COPY database/ ./database/
 
 EXPOSE 8000
 
