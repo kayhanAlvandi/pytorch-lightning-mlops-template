@@ -1,5 +1,4 @@
 """API configuration via environment variables or defaults."""
-from typing import Optional
 
 from pydantic_settings import BaseSettings
 
@@ -13,7 +12,7 @@ class Settings(BaseSettings):
     """
     
     # ── MLflow settings ──────────────────────────────────────────────────
-    tracking_uri: str = "sqlite:///mlflow.db"
+    tracking_uri: str = "http://mlflow:5000"
     experiment_name: str = "image_classifier"
     
     # ── Model source (priority: model_name > run_name) ──────────────────
@@ -22,10 +21,13 @@ class Settings(BaseSettings):
     
     # ── Tiling parameters ────────────────────────────────────────────────
     crop_size: int = 224
-    stride: Optional[int] = None  # None = non-overlapping (same as crop_size)
+    stride: int | None = None  # None = non-overlapping (same as crop_size)
     
     # ── Device ───────────────────────────────────────────────────────────
     device: str = "cpu"
+    
+    # ── Database ─────────────────────────────────────────────────────────
+    db_uri: str | None = None
     
     model_config = {"env_prefix": "API_", "env_file": ".env", "extra": "ignore"}
     
@@ -36,3 +38,8 @@ class Settings(BaseSettings):
     @property
     def has_model_source(self) -> bool:
         return bool(self.model_name or self.run_name)
+
+    @property
+    def has_db_uri(self) -> bool:
+        return bool(self.db_uri)
+

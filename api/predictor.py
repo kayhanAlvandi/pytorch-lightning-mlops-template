@@ -8,15 +8,24 @@ Models are loaded via ``mlflow.pytorch.load_model``; the model class code is
 bundled inside the MLflow artifact (logged with ``code_paths``), so the API does
 not import any training code from ``src/``.
 """
+from __future__ import annotations
+
 import json
 from collections import Counter
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-import numpy as np
-import torch
 import mlflow
 import mlflow.pytorch
+import numpy as np
+import torch
 from omegaconf import OmegaConf
+
+from utils.filename_parser import clean_image_metadata, clean_tiles_metadata
+
+if TYPE_CHECKING:
+    from database.dblogger import DBLogger
+
 
 
 class Normalize:
@@ -34,6 +43,9 @@ class Normalize:
         return (x - mean) / (std + self.eps)
 
 
+
+
+
 class TilePredictor:
     """Loads a trained model and performs tiled prediction on images.
     
@@ -44,6 +56,7 @@ class TilePredictor:
         4. Tile it into crop_size x crop_size patches
         5. Run inference on each tile
         6. Return per-tile predictions + majority vote
+        7. Save results to prediction database
     """
     
     def __init__(
@@ -53,8 +66,9 @@ class TilePredictor:
         model_name: str = "",
         run_name: str = "",
         crop_size: int = 224,
-        stride: "int | None" = None,
+        stride: int | None = None,
         device: str = "cpu",
+        db_logger: DBLogger | None = None
     ):
         self.device = torch.device(device)
         self.tracking_uri = tracking_uri
@@ -76,6 +90,7 @@ class TilePredictor:
         
         # Preprocessing: normalize per-channel (zero mean, unit variance)
         self.normalize = Normalize()
+        self.db_logger = db_logger
     
     def _load_model(self, model_name: str, run_name: str):
         """Load model with priority: model_name > run_name.
@@ -181,7 +196,7 @@ class TilePredictor:
             model = mlflow.pytorch.load_model(model_uri, map_location=self.device)
             print("  ✓ Loaded from run artifact")
             return model
-        except Exception:
+        except Exception:  # noqa: BLE001, S110
             pass
         
         # 2. Try model registry (find version linked to this run)
@@ -193,7 +208,7 @@ class TilePredictor:
                     model = mlflow.pytorch.load_model(model_uri, map_location=self.device)
                     print("  ✓ Loaded from model registry")
                     return model
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             print(f"  Registry lookup failed: {e}")
         
         raise FileNotFoundError(
@@ -220,7 +235,7 @@ class TilePredictor:
             
             backbone = cfg.model.get("backbone_name", cfg.model.get("_target_", "unknown"))
             info["backbone"] = backbone
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             print(f"  Warning: could not load hydra config: {e}")
         
         # Load class names from dataset manifest
@@ -232,12 +247,12 @@ class TilePredictor:
             if manifest_path.exists():
                 with open(manifest_path) as f:
                     manifest = json.load(f)
-                all_labels = sorted(set(
+                all_labels = sorted({
                     s["label"] for s in manifest.get("train_samples", []) + manifest.get("val_samples", [])
-                ))
+                })
                 if all_labels:
                     info["class_names"] = all_labels
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             print(f"  Warning: could not load dataset manifest: {e}")
         
         return info
@@ -278,10 +293,8 @@ class TilePredictor:
         _, h, w = image.shape
         tiles = []
         
-        row_idx = 0
-        for y in range(0, h - self.crop_size + 1, self.stride):
-            col_idx = 0
-            for x in range(0, w - self.crop_size + 1, self.stride):
+        for row_idx, y in enumerate(range(0, h - self.crop_size + 1, self.stride)):
+            for col_idx, x in enumerate(range(0, w - self.crop_size + 1, self.stride)):
                 tile = image[:, y:y + self.crop_size, x:x + self.crop_size]
                 tiles.append({
                     "tile": tile,
@@ -289,9 +302,8 @@ class TilePredictor:
                     "col": col_idx,
                     "y": y,
                     "x": x,
+                    "crop_size": self.crop_size,
                 })
-                col_idx += 1
-            row_idx += 1
         
         return tiles
     
@@ -368,34 +380,78 @@ class TilePredictor:
             "vote_fraction": winner_count / len(tile_predictions),
         }
     
-    def predict(self, image: np.ndarray) -> dict:
+    def predict(self, image: np.ndarray, image_metadata: list[dict]) -> dict:
         """Full prediction pipeline: preprocess -> tile -> predict -> majority vote.
         
         Args:
             image: numpy array of shape (C, H, W), raw pixel values
+            image_metadata: list of dictionaries containing image metadata (filename , root_path , shape)
             
         Returns:
             Dict with 'tile_predictions' and 'image_prediction' (majority vote)
         """
+
+        cleaned_image_metadata = clean_image_metadata(image_metadata)
+        img_ids = None
+        tile_stack_ids = None
+
+        if self.db_logger:
+            img_ids = self.db_logger.log_image_metadata(cleaned_image_metadata)
+
         # Preprocess
         tensor = self.preprocess_image(image)
-        
+
         # Tile
         tiles = self.tile_image(tensor)
-        
+
+        if self.db_logger:
+            # Log tile stack metadata (one stack_hash per tile position, shared by all channels)
+            tiles_metadata = clean_tiles_metadata(tiles, img_ids)
+            tile_stack_ids = self.db_logger.log_tile_stack(tiles_metadata)
+            # Each tile stack has all channel images as members
+            tile_stack_members = [
+                (tile_stack_id, img_id)
+                for tile_stack_id in tile_stack_ids
+                for img_id in img_ids
+            ]
+            self.db_logger.log_tile_stack_member(tile_stack_members)
+
         # Predict per tile
         tile_predictions = self.predict_tiles(tiles)
-        
+
         # Majority vote
         image_prediction = self.majority_vote(tile_predictions)
-        
-        return {
-            "image_prediction": image_prediction,
-            "tile_predictions": tile_predictions,
-            "image_shape": list(image.shape),
-            "num_tiles": len(tile_predictions),
-            "tile_grid": {
-                "rows": max((t["row"] for t in tile_predictions), default=0) + 1,
-                "cols": max((t["col"] for t in tile_predictions), default=0) + 1,
-            } if tile_predictions else {"rows": 0, "cols": 0},
+
+        if self.db_logger:
+            # Log image prediction
+            image_prediction_db = (
+                cleaned_image_metadata[0][0],
+                cleaned_image_metadata[0][1],
+                cleaned_image_metadata[0][2],
+                self.model_info["run_id"],
+                image_prediction["predicted_class"],
+                None,
+                image_prediction["total_tiles"],
+                image_prediction["vote_fraction"],
+                image_prediction["confidence"],
+            )
+            img_pred_id = self.db_logger.log_image_prediction(image_prediction_db)
+            # Log tile predictions (one row per tile)
+            tile_predictions_db = [
+                (img_pred_id, tile_stack_ids[i], self.model_info["run_id"],
+                 tile["predicted_class"], None, tile["confidence"])
+                for i, tile in enumerate(tile_predictions)
+            ]
+            self.db_logger.log_tile_prediction(tile_predictions_db)
+
+        result = {
+            "plate": cleaned_image_metadata[0][0],
+            "well": cleaned_image_metadata[0][1],
+            "field": cleaned_image_metadata[0][2],
+            "run_id": self.model_info["run_id"],
+            "predicted_class": image_prediction["predicted_class"],
+            "total_tiles": image_prediction["total_tiles"],
+            "vote_fraction": image_prediction["vote_fraction"],
+            "confidence": image_prediction["confidence"],
         }
+        return result

@@ -9,15 +9,16 @@ Models are loaded from MLflow (registered model name, run name, or checkpoint).
 import io
 import sys
 from contextlib import asynccontextmanager
+from enum import Enum
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
-from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse
 
 from api.config import Settings
 from api.predictor import TilePredictor
+from database.dblogger import DBLogger
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -25,14 +26,19 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 
 # Global predictor instance (loaded at startup)
-predictor: Optional[TilePredictor] = None
+predictor: TilePredictor | None = None
+db_logger: DBLogger | None = None
 settings = Settings()
 
+class InferenceMode(str, Enum):
+    production = "production"
+    test = "test"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Load model at startup from MLflow."""
     global predictor
+    global db_logger 
     
     if not settings.has_model_source:
         print("WARNING: No model source configured.")
@@ -41,6 +47,20 @@ async def lifespan(app: FastAPI):
     else:
         source = settings.model_name or settings.run_name
         print(f"Loading model: {source}")
+
+        if settings.has_db_uri:
+            db_logger = DBLogger(db_uri=settings.db_uri)
+            print(f"Connecting to database: {settings.db_uri}")
+            try:
+                db_logger.connect()
+            except Exception as e:  # noqa: BLE001
+                print(f"Failed to connect to database: {e}")
+                db_logger = None
+        else:
+            print("WARNING: No database URI configured.")
+            print("Set API_DB_URI to enable database logging.")
+            db_logger = None
+
         predictor = TilePredictor(
             tracking_uri=settings.tracking_uri,
             experiment_name=settings.experiment_name,
@@ -49,6 +69,7 @@ async def lifespan(app: FastAPI):
             crop_size=settings.crop_size,
             stride=settings.effective_stride,
             device=settings.device,
+            db_logger=db_logger
         )
         print(f"Model loaded. Source: {predictor.model_info['source']}")
         print(f"  Classes: {predictor.class_names}")
@@ -59,6 +80,8 @@ async def lifespan(app: FastAPI):
     
     # Cleanup
     predictor = None
+    if db_logger:
+        db_logger.close()
 
 
 app = FastAPI(
@@ -77,6 +100,7 @@ async def health():
         "status": "ok",
         "model_loaded": predictor is not None,
         "device": settings.device,
+        "database_connected": db_logger is not None,
     }
 
 
@@ -98,13 +122,23 @@ async def model_info():
         "stride": predictor.stride,
         "device": str(predictor.device),
     }
-
+@app.get("/db")
+async def db_info():
+    """Return detailed info about the database connection."""
+    if db_logger is None:
+        raise HTTPException(status_code=503, detail="No database connection.")
+    
+    return {
+        "connected": True,
+        "uri": settings.db_uri,
+    }
 
 @app.post("/predict")
 async def predict(
-    files: list[UploadFile] = File(..., description="Image files (one per channel, ordered C1..CN) or a single multi-channel .tif/.npy file"),
-    crop_size: Optional[int] = Query(None, description="Override tile crop size"),
-    stride: Optional[int] = Query(None, description="Override tile stride"),
+    files: list[UploadFile] = File(..., description="Image files (one per channel, ordered C1..CN) or a single multi-channel .tif/.npy file"),  # noqa: B008
+    root_path: str = Form(..., description="Root path for the image"),
+    crop_size: int | None = Query(None, description="Override tile crop size"),
+    stride: int | None = Query(None, description="Override tile stride"),
 ):
     """Predict on an uploaded image.
     
@@ -121,7 +155,13 @@ async def predict(
         )
     
     try:
-        image = await _load_image_from_uploads(files)
+        image_metadata,image = await _load_image_from_uploads(files)
+        temp = []
+        for metadata in image_metadata:
+            metadata["root_path"] = root_path
+            temp.append(metadata)
+        image_metadata = temp
+        
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     
@@ -137,7 +177,7 @@ async def predict(
         predictor.stride = stride
     
     try:
-        result = predictor.predict(image)
+        result = predictor.predict(image, image_metadata)
     finally:
         # Restore original settings
         predictor.crop_size = original_crop
@@ -146,38 +186,13 @@ async def predict(
     return JSONResponse(content=result)
 
 
-@app.post("/predict/single-channel")
-async def predict_single_channel(
-    file: UploadFile = File(..., description="Single grayscale image (will be replicated to all channels)"),
-):
-    """Predict on a single-channel image by replicating it across all expected channels.
-    
-    Useful for quick testing with standard grayscale images.
-    """
-    if predictor is None:
-        raise HTTPException(
-            status_code=503,
-            detail="No model loaded. Set API_MODEL_NAME or API_RUN_NAME.",
-        )
-    
-    try:
-        content = await file.read()
-        img = _load_single_image(content, file.filename)
-        # Replicate to expected number of channels (auto-detected from model)
-        image = np.stack([img] * predictor.in_channels, axis=0)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    
-    result = predictor.predict(image)
-    return JSONResponse(content=result)
-
-
-async def _load_image_from_uploads(files: list[UploadFile]) -> np.ndarray:
+async def _load_image_from_uploads(files: list[UploadFile]) -> tuple[list[dict], np.ndarray]:
     """Load uploaded files into a (C, H, W) numpy array.
     
     - Single .npy file: already stacked (C, H, W)
     - One or more image files (.tif, .jxl, etc.): each file = one channel, stacked in order
     """
+    infos = []
     if len(files) == 1:
         content = await files[0].read()
         filename = files[0].filename or "upload"
@@ -186,28 +201,39 @@ async def _load_image_from_uploads(files: list[UploadFile]) -> np.ndarray:
             image = np.load(io.BytesIO(content))
             if image.ndim != 3:
                 raise ValueError(f"Expected 3D array (C, H, W), got shape {image.shape}")
-            return image.astype(np.float32)
-        
+            info = {"shape": image.shape[1:], "filename": filename}
+            infos.append(info)
+            return infos, image.astype(np.float32)
+
         # Single image file = single channel
         img = _load_single_image(content, filename)
-        return img[np.newaxis].astype(np.float32)
-    
-    # Multiple files: each file = one channel
-    channels = []
-    for f in files:
-        content = await f.read()
-        channels.append(_load_single_image(content, f.filename or "upload"))
-    
-    shapes = [ch.shape for ch in channels]
-    if len(set(shapes)) > 1:
-        raise ValueError(f"All channel images must have same dimensions. Got: {shapes}")
-    
-    return np.stack(channels, axis=0).astype(np.float32)
+        info = {"shape": img.shape, "filename": filename}
+        infos.append(info)
+        return infos, img[np.newaxis].astype(np.float32)
+    else:
+        # Multiple files: each file = one channel
+        channels = []
+        for f in files:
+            content = await f.read()
+            img = _load_single_image(content, f.filename or "upload")
+            info = {}
+            info["shape"] = img.shape
+            info["filename"] = f.filename or "upload"
+            channels.append(img)
+            infos.append(info)
+        
+        shapes = [ch.shape for ch in channels]
+        if len(set(shapes)) > 1:
+            raise ValueError(f"All channel images must have same dimensions. Got: {shapes}")
+        assert len(infos) == len(channels)
+        
+        return infos, np.stack(channels, axis=0).astype(np.float32)
 
 
 def _load_single_image(content: bytes, filename: str) -> np.ndarray:
     """Load a single image from bytes into a 2D numpy array."""
     import cv2
+    import pillow_jxl  # noqa: F401  register JXL support with PIL
     from PIL import Image
 
     suffix = Path(filename).suffix.lower()
