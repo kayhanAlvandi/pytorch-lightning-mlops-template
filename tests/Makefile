@@ -13,7 +13,7 @@ test-fast:
 
 # Integration tests on CPU (training smoke, checkpoint round-trip, MLflow)
 test-integration:
-	cd $(ROOT) && pytest tests/integration -q
+	cd $(ROOT) && pytest tests/training/integration -q
 
 # Everything except GPU (mirrors the CI "all" dispatch option)
 test-all:

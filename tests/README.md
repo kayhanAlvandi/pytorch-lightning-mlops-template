@@ -5,11 +5,12 @@ selected with pytest markers, so CI and local runs can target subsets.
 
 ## Layout
 
-- `tests/unit/` — fast, isolated tests (transforms, dataset, model, datamodule, config).
-- `tests/integration/` — end-to-end tests (training smoke, checkpoint round-trip, MLflow).
+- `tests/training/unit/` — fast, isolated tests (transforms, dataset, model, datamodule, config).
+- `tests/training/integration/` — end-to-end tests (training smoke, checkpoint round-trip, MLflow).
+- `tests/training/conftest.py` — shared fixtures (synthetic images, `tiled_datamodule`, etc.).
 - `tests/api/` — FastAPI endpoint tests via `TestClient`.
+- `tests/db/` — database logger tests (requires PostgreSQL).
 - `tests/diagnostics/` — old exploratory scripts, **excluded** from collection (see `norecursedirs` in `pytest.ini`).
-- `tests/conftest.py` — shared fixtures (synthetic images, `tiled_datamodule`, etc.).
 
 ## Markers
 
@@ -30,8 +31,8 @@ Common invocations (also available as `make` targets from `tests/`):
 
 | Command | Make target | What runs |
 | --- | --- | --- |
-| `pytest tests/unit -q` | `make test-fast` | unit tests (no slow/GPU) |
-| `pytest tests/integration -q` | `make test-integration` | integration on CPU |
+| `pytest tests/training/unit -q` | `make test-fast` | unit tests (no slow/GPU) |
+| `pytest tests/training/integration -q` | `make test-integration` | integration on CPU |
 | `pytest -m "not gpu" -q` | `make test-all` | everything except GPU |
 | `pytest -m "gpu" -q` | `make gpu-test` | GPU tests (CUDA machine) |
 
@@ -41,7 +42,7 @@ Two separate workflows run on push / PR to `main`:
 
 | Workflow | File | Scope |
 | --- | --- | --- |
-| **Tests-Training** | `ci_training.yml` | `src/`, `tests/unit/`, `tests/integration/`, `train.py` — ruff lint + unit tests (push); dispatch: training / integration / all |
+| **Tests-Training** | `ci_training.yml` | `src/`, `tests/training/`, `train.py` — ruff lint + unit tests (push); dispatch: training / integration / all |
 | **Tests-Serving** | `ci_serving.yml` | `api/`, `tests/api/` — ruff lint + API tests |
 
 Both use a **reusable composite action** (`.github/actions/setup-env/`) that accepts a `requirements_file` input, sets up Python 3.11, caches pip, and installs dependencies.
