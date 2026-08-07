@@ -1,0 +1,5 @@
+[tool.ruff.lint.isort]
+known-first-party = ["database", "utils", "api"]
+
+[dependency-groups]
+dev = ["ruff==0.16.1"]
