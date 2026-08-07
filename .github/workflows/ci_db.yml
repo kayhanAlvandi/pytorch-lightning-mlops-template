@@ -55,7 +55,6 @@ jobs:
       - name: Set up Python
         uses: ./.github/actions/setup-env
         with:
-          python-version: '3.11'
           requirements-file: 'requirements/db_req.txt'
       - name: Run pytest
         env:
