@@ -9,6 +9,7 @@ on:
       - '.github/workflows/ci_db.yml'
       - '.github/actions/setup-env/'
       - 'requirements/db_req.txt'
+      - 'utils/filename_parser.py'
   pull_request:
     branches: [ main ]
   workflow_dispatch:
