@@ -168,9 +168,10 @@ The test suite lives under `tests/` and is organized into three layers:
 
 | Directory | Purpose |
 | --- | --- |
-| `tests/unit/` | Fast, isolated tests (transforms, dataset, model, datamodule, config) |
-| `tests/integration/` | End-to-end tests (training smoke, checkpoint round-trip, MLflow logging) |
+| `tests/training/unit/` | Fast, isolated tests (transforms, dataset, model, datamodule, config) |
+| `tests/training/integration/` | End-to-end tests (training smoke, checkpoint round-trip, MLflow logging) |
 | `tests/api/` | FastAPI endpoint tests via `TestClient` |
+| `tests/db/` | Database logger tests (requires PostgreSQL) |
 | `tests/diagnostics/` | Old exploratory scripts — **excluded** from collection |
 
 ### Markers
@@ -195,8 +196,8 @@ make gpu-test           # GPU tests (run on a CUDA machine)
 Or run directly:
 
 ```bash
-pytest tests/unit -q                  # unit tests only
-pytest tests/integration -q           # integration tests
+pytest tests/training/unit -q           # unit tests only
+pytest tests/training/integration -q    # integration tests
 pytest tests/api -q                   # API tests
 pytest -m "gpu" -q                    # GPU tests
 ```
@@ -207,7 +208,7 @@ Two GitHub Actions workflows run on push / PR to `main`:
 
 | Workflow | File | Triggers on | Runs |
 | --- | --- | --- | --- |
-| **Tests-Training** | `ci_training.yml` | `src/`, `tests/unit/`, `tests/integration/`, `train.py` | ruff lint → unit tests (push); dispatch: training / integration / all |
+| **Tests-Training** | `ci_training.yml` | `src/`, `tests/training/`, `train.py` | ruff lint → unit tests (push); dispatch: training / integration / all |
 | **Tests-Serving** | `ci_serving.yml` | `api/`, `tests/api/` | ruff lint → API tests |
 
 Both workflows use a **reusable composite action** (`.github/actions/setup-env/`) that accepts a `requirements_file` input, sets up Python 3.11, caches pip, and installs dependencies.
