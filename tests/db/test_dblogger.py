@@ -293,24 +293,51 @@ class TestLogTileStackMember:
     """Tests for DBLogger.log_tile_stack_member."""
 
     def test_members_inserted_for_all_channels(self, db_logger):
-        """Each (tile_stack_id, image_id) pair is inserted as a member."""
+        """Each (tile_stack_id, image_id, channel_index) triple is inserted as a member."""
         img_ids = _insert_images(db_logger)
         tiles = _make_tiles(2)
         tile_stack_metadata = clean_tiles_metadata(tiles, img_ids)
         tile_stack_ids = db_logger.log_tile_stack(tile_stack_metadata)
 
         members = [
-            (tile_stack_id, img_id)
+            (tile_stack_id, img_id, channel_index)
             for tile_stack_id in tile_stack_ids
-            for img_id in img_ids
+            for channel_index, img_id in enumerate(img_ids)
         ]
-        db_logger.log_tile_stack_member(members)
+        member_ids = db_logger.log_tile_stack_member(members)
+
+        assert member_ids is not None
+        assert len(member_ids) == len(members)
 
         with db_logger.connection.cursor() as cur:
             cur.execute("SELECT COUNT(*) FROM tile_stack_member")
             count = cur.fetchone()[0]
 
         assert count == len(tile_stack_ids) * len(img_ids)
+
+    def test_channel_index_stored_correctly(self, db_logger):
+        """channel_index is stored per member, matching the model's input channel-axis position."""
+        img_ids = _insert_images(db_logger)
+        tiles = _make_tiles(1)
+        tile_stack_metadata = clean_tiles_metadata(tiles, img_ids)
+        tile_stack_ids = db_logger.log_tile_stack(tile_stack_metadata)
+
+        members = [
+            (tile_stack_ids[0], img_id, channel_index)
+            for channel_index, img_id in enumerate(img_ids)
+        ]
+        db_logger.log_tile_stack_member(members)
+
+        with db_logger.connection.cursor() as cur:
+            cur.execute(
+                "SELECT image_id, channel_index FROM tile_stack_member "
+                "WHERE tile_stack_id = %s ORDER BY channel_index",
+                (tile_stack_ids[0],),
+            )
+            rows = cur.fetchall()
+
+        assert [row[0] for row in rows] == img_ids
+        assert [row[1] for row in rows] == list(range(len(img_ids)))
 
     def test_duplicate_members_ignored(self, db_logger):
         """Inserting the same members twice does not raise and count stays the same."""
@@ -319,7 +346,7 @@ class TestLogTileStackMember:
         tile_stack_metadata = clean_tiles_metadata(tiles, img_ids)
         tile_stack_ids = db_logger.log_tile_stack(tile_stack_metadata)
 
-        members = [(tile_stack_ids[0], img_ids[0])]
+        members = [(tile_stack_ids[0], img_ids[0], 0)]
         db_logger.log_tile_stack_member(members)
         db_logger.log_tile_stack_member(members)  # duplicate — must not raise
 
@@ -396,9 +423,9 @@ class TestLogTilePrediction:
         tile_stack_metadata = clean_tiles_metadata(tiles, img_ids)
         tile_stack_ids = db_logger.log_tile_stack(tile_stack_metadata)
         members = [
-            (tile_stack_id, img_id)
+            (tile_stack_id, img_id, channel_index)
             for tile_stack_id in tile_stack_ids
-            for img_id in img_ids
+            for channel_index, img_id in enumerate(img_ids)
         ]
         db_logger.log_tile_stack_member(members)
         img_pred_id = db_logger.log_image_prediction(_make_image_prediction_tuple())

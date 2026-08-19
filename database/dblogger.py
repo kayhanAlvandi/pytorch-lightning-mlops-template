@@ -69,16 +69,17 @@ class DBLogger:
 
         Args:
             tile_stack_members: list of tuples, each:
-                (tile_stack_id, img_id)
+                (tile_stack_id, img_id, channel_index)
         """
         for attempt in range(2): # try once, reconnect and retry once
             try:
                 with self.connection.cursor() as cursor:
                     cursor.executemany("""
-                    INSERT INTO tile_stack_member (tile_stack_id, image_id)
-                    VALUES (%s, %s) ON CONFLICT (tile_stack_id, image_id) DO UPDATE SET tile_stack_id = EXCLUDED.tile_stack_id, image_id = EXCLUDED.image_id
+                    INSERT INTO tile_stack_member (tile_stack_id, image_id, channel_index)
+                    VALUES (%s, %s, %s) ON CONFLICT (tile_stack_id, image_id)
+                        DO UPDATE SET channel_index = EXCLUDED.channel_index
                     RETURNING id
-                    """, tile_stack_members, returning=True)
+                """, tile_stack_members, returning=True)
                     tile_stack_member_ids = []
                     for _ in cursor.results():
                         tile_stack_member_ids.append(cursor.fetchone()[0])
@@ -87,6 +88,7 @@ class DBLogger:
             except psycopg.OperationalError:
                 print("DB connection lost, reconnecting...")
                 self.connection = psycopg.connect(self.db_uri)
+        return None
         return None
     
     def log_image_prediction(self, image_prediction: tuple):
