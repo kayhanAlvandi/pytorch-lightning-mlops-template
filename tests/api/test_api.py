@@ -77,6 +77,8 @@ class FakePredictor:
         }
 
     def predict(self, image, image_metadata):
+        self.last_image = image
+        self.last_image_metadata = image_metadata
         if self.db_logger:
             from utils.filename_parser import clean_image_metadata, clean_tiles_metadata
             cleaned = clean_image_metadata(image_metadata)
@@ -84,7 +86,11 @@ class FakePredictor:
             fake_tiles = [{"row": 0, "col": 0, "x": 0, "y": 0, "crop_size": self.crop_size}]
             tile_stack_metadata = clean_tiles_metadata(fake_tiles, img_ids)
             tile_stack_ids = self.db_logger.log_tile_stack(tile_stack_metadata)
-            members = [(ts_id, img_id) for ts_id in tile_stack_ids for img_id in img_ids]
+            members = [
+                (ts_id, img_id, channel_index)
+                for ts_id in tile_stack_ids
+                for channel_index, img_id in enumerate(img_ids)
+            ]
             self.db_logger.log_tile_stack_member(members)
             img_pred_id = self.db_logger.log_image_prediction(
                 ("plate", "well", 1, self.model_info["run_id"], "ClassA", None, 1, 1.0, 0.95)
@@ -136,6 +142,16 @@ def _multi_channel_tif_files(n_channels=3, size=(32, 32)) -> list[tuple]:
         fname = f"PLATE1_A01_T0001F001L01A01Z01C0{ch}.tif"
         files.append(_tif_file(fname, size))
     return files
+
+
+def _tif_file_with_value(filename: str, value: int, size=(32, 32)) -> tuple:
+    """Create a single-channel .tif upload whose pixels are all `value`, so channels
+    can be told apart by content (not just by upload position)."""
+    arr = np.full(size, value, dtype=np.uint16)
+    ok, encoded = cv2.imencode(".tif", arr)
+    assert ok, f"Failed to encode tif for {filename}"
+    buf = io.BytesIO(encoded.tobytes())
+    return ("files", (filename, buf, "image/tif"))
 
 
 def test_health_reports_no_model(client):
@@ -241,6 +257,52 @@ def test_predict_multi_channel_logs_per_channel_metadata(client):
     assert wells == {"A01"}
     root_paths = {row[4] for row in metadata}
     assert root_paths == {"/data/images"}
+
+
+# ── Channel-order canonicalization ──────────────────────────────────────────
+# Training (src/dataset.py) always stacks channels sorted ascending by
+# channel number. Inference must replicate that exact order regardless of
+# upload order, or the model silently sees out-of-distribution input.
+
+
+def test_predict_canonicalizes_shuffled_channel_order(client):
+    """Uploading channels out of order still stacks/logs them in ascending
+    channel-number order, matching how the model was trained."""
+    predictor = FakePredictor()
+    api_main.predictor = predictor
+    # Upload order is deliberately C03, C01, C02 -- not ascending.
+    files = [
+        _tif_file_with_value("PLATE1_A01_T0001F001L01A01Z01C03.tif", value=30),
+        _tif_file_with_value("PLATE1_A01_T0001F001L01A01Z01C01.tif", value=10),
+        _tif_file_with_value("PLATE1_A01_T0001F001L01A01Z01C02.tif", value=20),
+    ]
+    r = client.post("/predict", files=files, data={"root_path": "/tmp"})
+    assert r.status_code == 200
+
+    # Metadata order is canonicalized to ascending channel number...
+    filenames = [info["filename"] for info in predictor.last_image_metadata]
+    assert filenames == [
+        "PLATE1_A01_T0001F001L01A01Z01C01.tif",
+        "PLATE1_A01_T0001F001L01A01Z01C02.tif",
+        "PLATE1_A01_T0001F001L01A01Z01C03.tif",
+    ]
+    # ...and the actual image array's channel axis is reordered to match,
+    # not just the metadata (channel 1's pixel value ends up at axis 0, etc).
+    assert predictor.last_image[0].flat[0] == 10
+    assert predictor.last_image[1].flat[0] == 20
+    assert predictor.last_image[2].flat[0] == 30
+
+
+def test_predict_rejects_duplicate_channel_numbers(client):
+    """Two files parsed to the same channel number should be rejected, not
+    silently collide/overwrite each other in the channel axis."""
+    api_main.predictor = FakePredictor()
+    files = [
+        _tif_file_with_value("PLATE1_A01_T0001F001L01A01Z01C01.tif", value=10),
+        _tif_file_with_value("PLATE1_A01_T0001F002L01A01Z01C01.tif", value=20),
+    ]
+    r = client.post("/predict", files=files, data={"root_path": "/tmp"})
+    assert r.status_code == 400
 
 
 # ── Database connection tests ───────────────────────────────────────────────

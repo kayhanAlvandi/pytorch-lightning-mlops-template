@@ -34,6 +34,10 @@ CREATE TABLE IF NOT EXISTS tile_stack_member (
     id SERIAL PRIMARY KEY,
     tile_stack_id INTEGER REFERENCES tile_stack(id),
     image_id INTEGER REFERENCES image_metadata(id),
+    channel_index INTEGER NOT NULL,   -- position of this channel in the model's input tensor
+                                       -- (ascending by channel number, matching src/dataset.py's
+                                       -- sorted(channels) training convention) -- explicit and
+                                       -- durable, not inferred from insertion/list order
     UNIQUE (tile_stack_id, image_id)
 );
 

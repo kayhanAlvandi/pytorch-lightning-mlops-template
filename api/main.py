@@ -19,6 +19,7 @@ from fastapi.responses import JSONResponse
 from api.config import Settings
 from api.predictor import TilePredictor
 from database.dblogger import DBLogger
+from utils.filename_parser import extract_info_from_filename
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -226,7 +227,20 @@ async def _load_image_from_uploads(files: list[UploadFile]) -> tuple[list[dict],
         if len(set(shapes)) > 1:
             raise ValueError(f"All channel images must have same dimensions. Got: {shapes}")
         assert len(infos) == len(channels)
-        
+
+        # Canonicalize channel order to match training: src/dataset.py always
+        # stacks channels sorted ascending by channel number
+        # (`self.channels = sorted(channels)`), so inference must use that
+        # exact same order regardless of upload order, or the model sees
+        # out-of-distribution input whenever a caller doesn't happen to
+        # upload files in C1..CN order.
+        parsed_channels = [extract_info_from_filename(info["filename"])["channel"] for info in infos]
+        if len(set(parsed_channels)) != len(parsed_channels):
+            raise ValueError(f"Duplicate channel numbers in upload: {parsed_channels}")
+        order = sorted(range(len(channels)), key=lambda i: parsed_channels[i])
+        channels = [channels[i] for i in order]
+        infos = [infos[i] for i in order]
+
         return infos, np.stack(channels, axis=0).astype(np.float32)
 
 

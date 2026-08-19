@@ -408,11 +408,17 @@ class TilePredictor:
             # Log tile stack metadata (one stack_hash per tile position, shared by all channels)
             tiles_metadata = clean_tiles_metadata(tiles, img_ids)
             tile_stack_ids = self.db_logger.log_tile_stack(tiles_metadata)
-            # Each tile stack has all channel images as members
+            # Each tile stack has all channel images as members. channel_index
+            # is img_ids' position, which is the model's input channel-axis
+            # position (img_ids is built from image_metadata, which is now
+            # canonicalized to ascending channel-number order by
+            # api/main.py::_load_image_from_uploads before predict() is
+            # called) -- stored explicitly so it doesn't need to be
+            # reconstructed later.
             tile_stack_members = [
-                (tile_stack_id, img_id)
+                (tile_stack_id, img_id, channel_index)
                 for tile_stack_id in tile_stack_ids
-                for img_id in img_ids
+                for channel_index, img_id in enumerate(img_ids)
             ]
             self.db_logger.log_tile_stack_member(tile_stack_members)
 
