@@ -385,7 +385,7 @@ class TilePredictor:
         
         Args:
             image: numpy array of shape (C, H, W), raw pixel values
-            image_metadata: list of dictionaries containing image metadata (filename , root_path , shape)
+            image_metadata: list of dictionaries containing image metadata (filename , root_path , shape) and optionally (is_reference , label)
             
         Returns:
             Dict with 'tile_predictions' and 'image_prediction' (majority vote)
@@ -404,6 +404,7 @@ class TilePredictor:
         # Tile
         tiles = self.tile_image(tensor)
 
+
         if self.db_logger:
             # Log tile stack metadata (one stack_hash per tile position, shared by all channels)
             tiles_metadata = clean_tiles_metadata(tiles, img_ids)
@@ -414,7 +415,7 @@ class TilePredictor:
                 for tile_stack_id in tile_stack_ids
                 for img_id in img_ids
             ]
-            self.db_logger.log_tile_stack_member(tile_stack_members)
+            tile_stack_member_ids = self.db_logger.log_tile_stack_member(tile_stack_members)
 
         # Predict per tile
         tile_predictions = self.predict_tiles(tiles)
@@ -430,16 +431,18 @@ class TilePredictor:
                 cleaned_image_metadata[0][2],
                 self.model_info["run_id"],
                 image_prediction["predicted_class"],
-                None,
+                image_metadata[0].get("label", None),
                 image_prediction["total_tiles"],
                 image_prediction["vote_fraction"],
                 image_prediction["confidence"],
+                image_metadata[0].get("is_reference", False),
             )
             img_pred_id = self.db_logger.log_image_prediction(image_prediction_db)
             # Log tile predictions (one row per tile)
             tile_predictions_db = [
                 (img_pred_id, tile_stack_ids[i], self.model_info["run_id"],
-                 tile["predicted_class"], None, tile["confidence"])
+                 tile["predicted_class"], image_metadata[0].get("label", None), tile["confidence"],
+                 image_metadata[0].get("is_reference", False))
                 for i, tile in enumerate(tile_predictions)
             ]
             self.db_logger.log_tile_prediction(tile_predictions_db)

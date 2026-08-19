@@ -33,7 +33,7 @@ def clean_image_metadata(image_metadata: list[dict]) -> list[tuple]:
     """Convert raw upload metadata into DB-ready tuples.
 
     Args:
-        image_metadata: list of dicts with keys 'filename', 'shape', 'root_path'
+        image_metadata: list of dicts with keys 'filename', 'shape', 'root_path' 
             (as built by the API from UploadFile objects).
 
     Returns:

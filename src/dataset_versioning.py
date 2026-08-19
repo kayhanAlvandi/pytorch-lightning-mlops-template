@@ -175,10 +175,6 @@ def create_dataset_manifest(
         'train_samples': [],
         'val_samples': [],
     }
-    
-    # root_dir is shared by every sample in the datamodule (single dataset root),
-    # so it's recorded once at the top level rather than per-sample.
-    manifest['root_dir'] = str(datamodule.root_dir)
 
     # Collect train samples
     if hasattr(datamodule, 'train_dataset'):
@@ -189,6 +185,7 @@ def create_dataset_manifest(
                 'well': sample['well'],
                 'field': sample['field'],
                 'label': sample['label'],
+                "root_dir": str(datamodule.root_dir),
                 # store filenames only (not full paths) so the manifest stays
                 # portable across machines/containers -- combine with the
                 # top-level 'root_dir' at read time: Path(root_dir) / filename
@@ -206,6 +203,7 @@ def create_dataset_manifest(
                 'well': sample['well'],
                 'field': sample['field'],
                 'label': sample['label'],
+                'root_dir': str(datamodule.root_dir),
                 'channel_files': {
                     channel: path.name for channel, path in sample['channel_files'].items()
                 },
