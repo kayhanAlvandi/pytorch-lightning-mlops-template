@@ -179,16 +179,20 @@ def create_dataset_manifest(
     # Collect train samples
     if hasattr(datamodule, 'train_dataset'):
         for idx, sample in enumerate(datamodule.train_dataset.samples):
+            ## get root path from channel_files paths
+            root_paths = [path.parent for path in sample['channel_files'].values()]
+            assert len(set(root_paths)) == 1, "All channel files should have the same root path"
+            root_path = root_paths[0]
             manifest['train_samples'].append({
                 'index': idx,
                 'plate': sample['plate'],
                 'well': sample['well'],
                 'field': sample['field'],
                 'label': sample['label'],
-                "root_dir": str(datamodule.root_dir),
+                "root_path": str(root_path),
                 # store filenames only (not full paths) so the manifest stays
                 # portable across machines/containers -- combine with the
-                # top-level 'root_dir' at read time: Path(root_dir) / filename
+                # top-level 'root_path' at read time: Path(root_path) / filename
                 'channel_files': {
                     channel: path.name for channel, path in sample['channel_files'].items()
                 },
@@ -197,13 +201,17 @@ def create_dataset_manifest(
     # Collect val samples
     if hasattr(datamodule, 'val_dataset'):
         for idx, sample in enumerate(datamodule.val_dataset.samples):
+            ## get root path from channel_files paths
+            root_paths = [path.parent for path in sample['channel_files'].values()]
+            assert len(set(root_paths)) == 1, "All channel files should have the same root path"
+            root_path = root_paths[0]
             manifest['val_samples'].append({
                 'index': idx,
                 'plate': sample['plate'],
                 'well': sample['well'],
                 'field': sample['field'],
                 'label': sample['label'],
-                'root_dir': str(datamodule.root_dir),
+                "root_path": str(root_path),
                 'channel_files': {
                     channel: path.name for channel, path in sample['channel_files'].items()
                 },
