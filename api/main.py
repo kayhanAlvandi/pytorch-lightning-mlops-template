@@ -193,9 +193,9 @@ def extract_infos(filenames : list[str]) -> dict:
     
     ## normalize metdata shape like training metdata
     ## all plates , well, and fields should be the same for one sample
-    assert len(set([info["plate"] for info in infos])) == 1, "All plates should be the same for one sample"
-    assert len(set([info["well"] for info in infos])) == 1, "All wells should be the same for one sample"
-    assert len(set([info["field"] for info in infos])) == 1, "All fields should be the same for one sample"
+    assert len({info["plate"] for info in infos}) == 1, "All plates should be the same for one sample"
+    assert len({info["well"] for info in infos}) == 1, "All wells should be the same for one sample"
+    assert len({info["field"] for info in infos}) == 1, "All fields should be the same for one sample"
 
 
 
@@ -236,8 +236,7 @@ async def _load_image_from_uploads(files: list[UploadFile]) -> tuple[dict, list[
     infos["shape"] = channels[0].shape
 
     return infos, channels
-
-
+    
 def _load_single_image(content: bytes, filename: str) -> np.ndarray:
     """Load a single image from bytes into a 2D numpy array."""
     import cv2
@@ -258,5 +257,6 @@ def _load_single_image(content: bytes, filename: str) -> np.ndarray:
         raise ValueError(f"Failed to decode image: {filename}")
  
     return img.astype(np.float32)
+
 
 

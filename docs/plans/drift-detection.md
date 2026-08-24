@@ -194,15 +194,15 @@ training-machine-specific absolute paths.
    `DBLogger` so every live `/predict` call also computes per-tile per-channel
    mean/std/p1/p5/p95/p99 and logs them via `log_tile_channel_stats`, using the ids returned
    from `log_tile_stack_member`.
-4. **`monitoring/compute_reference.py`**: given a `--run-id`, instantiate `TilePredictor`
-   directly (tracking_uri + model_name/run_name, same as `api/config.py`/`main.py`), download
-   `dataset_manifest.json` + `hydra_config.yaml` (reusing `TilePredictor._download_hydra_config`/
-   `_load_run_config`), resolve val-sample file paths via `root_dir` + `channel_files`, run
-   each sample through `preprocess_image` → `tile_image` → `predict_tiles` (reusing the loaded
-   model), compute channel stats per tile, and insert via the now-shared `DBLogger` methods
-   with `is_reference=True` and the known `t_label`. Skips samples that already have reference
-   rows (per-sample resumability query in step 2), so an interrupted run resumes instead of
-   restarting or silently no-op'ing.
+4. **DONE**: `monitoring/compute_reference.py` — instantiates `TilePredictor` directly
+   (tracking_uri + model_name/run_name via `api/config.py`'s `Settings`, same source as
+   `api/main.py`), reads `dataset_manifest.json` from `predictor.model_info["artifact_dir"]`
+   (already downloaded by `TilePredictor._load_run_config`), resolves val-sample file paths via
+   `root_path` + `channel_files`, runs each sample through the existing `predictor.predict()`
+   pipeline (preprocess → tile → predict_tiles → majority vote, plus channel-stats logging) with
+   `is_reference=True` and the known `label` set in `image_metadata`. Skips samples that already
+   have reference rows (via `DBLogger.get_reference_samples`, step 2's resumability query), so an
+   interrupted run resumes instead of restarting or silently no-op'ing.
 5. **Docker/Makefile wiring**: `compute-reference` target in `docker/makefile`, running
    `python -m monitoring.compute_reference` inside the existing `api` image (already has
    `mlflow`/`torch`/`timm`/`psycopg` — no new image needed), mirroring `train-run`'s

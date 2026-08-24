@@ -164,17 +164,14 @@ class TilePredictor:
                 "run_name (e.g. 'my_training_run')"
             )
         
-        # Extract config from MLflow run artifacts if we have a run_id
-        if run_id:
-            info.update(self._load_run_config(run_id))
-        
-        # Ensure class_names is always set
-        if "class_names" not in info:
-            if hasattr(model, "class_names") and model.class_names:
-                info["class_names"] = model.class_names
-            else:
-                info["class_names"] = [str(i) for i in range(model.num_classes)]
-        
+        # Extract config from MLflow run artifacts if we have a run_id.
+        # class_names order must match the model's output logits exactly, so
+        # this must come from dataset_metadata.json -- no silent fallback to
+        # a guessed/differently-ordered class list, or every prediction gets
+        # mislabeled without any indication something went wrong.
+        if not run_id:
+            raise ValueError("No run_id resolved; cannot load artifacts")
+        info.update(self._load_run_config(run_id))
         info["run_id"] = run_id
         info["model_class"] = model.__class__.__name__
         info["num_classes"] = model.num_classes
@@ -258,46 +255,53 @@ class TilePredictor:
             f"No logged model found for run {run_id} (checked run artifact and registry)"
         )
     
-    def _download_hydra_config(self, run_id: str):
+    def _download_artifact(self, run_id: str):
         """Download and parse hydra_config.yaml from MLflow run artifacts."""
         artifact_dir = mlflow.artifacts.download_artifacts(
             run_id=run_id, tracking_uri=self.tracking_uri,
         )
-        config_path = Path(artifact_dir) / "hydra_config.yaml"
-        return OmegaConf.load(config_path)
+        return artifact_dir
     
     def _load_run_config(self, run_id: str) -> dict:
         """Extract crop_size, channels, class_names from MLflow run artifacts."""
         info = {}
+        try:
+            info['artifact_dir'] = self._download_artifact(run_id)
+        except Exception as e: 
+            raise RuntimeError(
+                f"Could not download artifacts for run {run_id}"
+            ) from e
         
         try:
-            cfg = self._download_hydra_config(run_id)
+            config_path = Path(info['artifact_dir']) / "hydra_config.yaml"
+            cfg = OmegaConf.load(config_path)
             ds_cfg = cfg.datamodule.dataset
             info["crop_size"] = ds_cfg.get("crop_size", 224)
             info["in_channels"] = len(list(ds_cfg.get("channels", [1, 2, 3, 4, 5])))
             
             backbone = cfg.model.get("backbone_name", cfg.model.get("_target_", "unknown"))
             info["backbone"] = backbone
-        except Exception as e:  # noqa: BLE001
-            print(f"  Warning: could not load hydra config: {e}")
+        except Exception as e:
+            raise RuntimeError(
+                f"Could not load hydra config for run {run_id}: {e}"
+            ) from e
         
-        # Load class names from dataset manifest
-        try:
-            artifact_dir = mlflow.artifacts.download_artifacts(
-                run_id=run_id, tracking_uri=self.tracking_uri,
+
+        metadata_path = Path(info['artifact_dir']) / "dataset_metadata.json"
+        if not metadata_path.exists():
+            raise FileNotFoundError(
+                f"dataset_metadata.json not found in run {run_id} artifacts "
+                f"({metadata_path}); cannot determine class_names order."
             )
-            manifest_path = Path(artifact_dir) / "dataset_manifest.json"
-            if manifest_path.exists():
-                with open(manifest_path) as f:
-                    manifest = json.load(f)
-                all_labels = sorted({
-                    s["label"] for s in manifest.get("train_samples", []) + manifest.get("val_samples", [])
-                })
-                if all_labels:
-                    info["class_names"] = all_labels
-        except Exception as e:  # noqa: BLE001
-            print(f"  Warning: could not load dataset manifest: {e}")
-        
+        with open(metadata_path) as f:
+            dataset_metadata = json.load(f)
+        class_names = dataset_metadata.get("class_names")
+        if not class_names:
+            raise ValueError(
+                f"dataset_metadata.json for run {run_id} has no class_names."
+            )
+        info["class_names"] = class_names
+
         return info
     
     def preprocess_image(self, image: np.ndarray) -> torch.Tensor:
