@@ -1,0 +1,16 @@
+# Dev override for the api service: bind-mounts source so edits are picked
+# up immediately (with --reload) instead of requiring a rebuild.
+#
+# Usage: docker compose -f docker-compose.yaml -f docker-compose.dev.yaml up
+#
+# Not meant for prod/staging -- keep the base docker-compose.yaml COPY-based
+# and only rebuilt/pushed on merge to main, so the deployed image never
+# depends on what happens to be on a dev machine's disk.
+services:
+  api:
+    volumes:
+      - ../../../api:/app/api:ro
+      - ../../../utils:/app/utils:ro
+      - ../../../database:/app/database:ro
+      - ../../../monitoring:/app/monitoring:ro
+    command: ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

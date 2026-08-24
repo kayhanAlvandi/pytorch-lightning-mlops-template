@@ -40,3 +40,81 @@ conflicting dependency versions.
 
 **Status:** Not started. Revisit before onboarding more developers to
 training or before relying on this for production serving.
+
+## Drift detection: parallelisation approach (decided, shelved)
+
+**Context:**
+`TilePredictor.predict()` already batches tiles per image (~100 tiles
+per image → one `model(batch_of_100)` call). The GPU is already
+well-utilized per image, so cross-image batching gives negligible gain.
+
+**Decision: shelve `batch_predict`**
+A `batch_predict()` method was designed (see
+`docs/plans/batch-predict.md`) but is shelved because `predict()`
+already batches tiles at the GPU level. Adding cross-image batching
+would add complexity for no meaningful speedup.
+
+**Why threads don't work here:**
+- Psycopg 3 connections are not thread-safe. A shared `DBLogger`
+  cannot be used across threads — parallel `predict()` calls sharing
+  `self.db_logger` would corrupt connection state and return wrong IDs.
+- Multiple threads calling `self.model(...)` on one GPU serialize at
+  the hardware level (CUDA queues kernels sequentially) — no speedup.
+- Python GIL limits CPU-side parallelism for preprocessing/tiling/DB
+  logging to ~1.3-1.5x, not true N×.
+
+**Future approach: multi-process with `--shard` and `--device`**
+True parallelism comes from **one process per hardware resource**,
+each with its own `DBLogger` connection and `TilePredictor` instance,
+processing disjoint shards of the samples. No locks, no shared state.
+
+```
+# Multi-GPU (true N× speedup):
+python compute_reference.py --shard 0/2 --device cuda:0
+python compute_reference.py --shard 1/2 --device cuda:1
+
+# CPU-only multi-process (true N× on CPU):
+python compute_reference.py --shard 0/4 --device cpu
+python compute_reference.py --shard 1/4 --device cpu
+python compute_reference.py --shard 2/4 --device cpu
+python compute_reference.py --shard 3/4 --device cpu
+
+# Mixed GPU + CPU (GPU gets most samples, CPU offloads a few):
+python compute_reference.py --shard 0/3 --device cuda:0   # GPU, ~70% of samples
+python compute_reference.py --shard 1/3 --device cpu      # CPU, ~15% of samples
+python compute_reference.py --shard 2/3 --device cpu      # CPU, ~15% of samples
+```
+
+**Why multiple processes/pods are safe but threads are not:**
+- Each process/pod has its **own Psycopg connection**. PostgreSQL uses
+  MVCC and handles hundreds of concurrent connections natively.
+- A single Psycopg connection shared across threads corrupts because
+  the connection has internal protocol state (current query, transaction,
+  result buffer) that can't be interleaved.
+- The rule: **one worker = one process = one connection.**
+
+**Mixed CPU+GPU caveat:**
+CPU inference is 10-50x slower than GPU for typical CNN models. The
+CPU processes become the bottleneck unless:
+- The model is small (CPU only 5-10x slower).
+- There are many CPU cores (8+) and thousands of samples.
+- The GPU process gets the majority of samples.
+For hundreds of reference samples, single-GPU `predict()` in a loop
+is sufficient. Mixed CPU+GPU is only worth it for very large jobs.
+
+**What NOT to do:**
+- Do not `ThreadPoolExecutor` parallel `predict()` with a shared
+  `DBLogger` — Psycopg 3 will break.
+- Do not run multiple processes on the **same GPU** — CUDA serializes
+  kernels across processes, so you get the same throughput with extra
+  memory overhead (two model copies on GPU) and context-switch cost.
+  The only exception is NVIDIA MPS, which is complex and not worth it
+  here.
+- Do not `multiprocessing` with a shared `DBLogger` — connections are
+  not picklable across processes.
+
+**Status:** Decision made. `batch_predict` shelved. Multi-process
+`--shard`/`--device` approach documented for future implementation
+when `compute_reference.py` needs to scale beyond a single GPU.
+Kubernetes horizontal scaling (step 7) uses the same pattern at
+larger scale with a job queue.
