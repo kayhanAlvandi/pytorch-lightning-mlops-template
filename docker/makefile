@@ -25,6 +25,12 @@ compute-reference: network
 	docker compose -f jobs/compute-reference/docker-compose.yaml run --rm compute-reference \
 		$(if $(CMD),$(CMD),python -m monitoring.compute_reference)
 
+# Usage: make drift-report-run  (or CMD="python -m monitoring.run_drift_report --window-days 14")
+# Resolves the served model's run_id from the running api's /model endpoint.
+drift-report-run: network
+	docker compose -f jobs/monitoring/docker-compose.yaml run --rm drift-report \
+		$(if $(CMD),$(CMD),python -m monitoring.run_drift_report)
+
 # ── Teardown (each is independent — won't affect others) ─────────────────
 down-mlflow:
 	docker compose -f services/mlflow/docker-compose.yaml down

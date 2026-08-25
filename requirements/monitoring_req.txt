@@ -1,0 +1,11 @@
+# Drift monitoring job (compute_reference reuses the api image; run_drift_report
+# uses this lightweight set -- no torch/timm/mlflow). run_id is read off the
+# running API's /model endpoint via stdlib urllib, so mlflow is not needed here.
+#
+# Evidently is pinned to the last release of the classic
+# evidently.report.Report / metric_preset / as_dict() API (0.7.x is a rewrite
+# with a different, incompatible API that run_drift_report.py does not use).
+evidently==0.6.7
+pandas>=2.0.0
+psycopg[binary,pool]>=3.2.10
+pydantic-settings>=2.0.0

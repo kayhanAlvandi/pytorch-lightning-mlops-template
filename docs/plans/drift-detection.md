@@ -207,14 +207,27 @@ training-machine-specific absolute paths.
    `python -m monitoring.compute_reference` inside the existing `api` image (already has
    `mlflow`/`torch`/`timm`/`psycopg` — no new image needed), mirroring `train-run`'s
    `$(CMD)`-passthrough pattern.
-6. **`monitoring/run_drift_report.py`**: pull reference rows (`reference_image_summary` view /
-   raw `reference_image_prediction`/`reference_tile_prediction` views) and current-window rows
-   from `live_image_prediction`/`live_tile_prediction` + `tile_channel_stats`, both grouped by
-   `p_label`; build an Evidently `Report` (categorical drift on label distribution, numeric
-   drift on `vote_fraction`/`avg_confidence`/`confidence`/channel stats — channel stats pivoted
-   from long to wide, one column per channel×stat, before feeding Evidently); write the
-   HTML/JSON report to `monitoring/reports/`; insert one `drift_report` row + its
-   `drift_report_column` rows via `DBLogger`.
+6. **DONE**: `monitoring/run_drift_report.py` — pulls reference rows
+   (`reference_image_prediction`/`reference_tile_prediction` views) and current-window rows
+   (`live_image_prediction`/`live_tile_prediction` + `tile_channel_stats`, with the reference-well
+   `NOT EXISTS` exclusion below) via new `DBLogger` fetch methods, and runs Evidently
+   `DataDriftPreset` for **three separate groups** (they have different row cardinalities —
+   images vs. tiles vs. tile-channels — so they can't share one DataFrame):
+   `image_level` (`p_label` categorical + `vote_fraction`/`avg_confidence` numeric),
+   `tile_level` (`p_label` categorical + `confidence` numeric, deduped per tile), and
+   `channel_stats` (per-channel pixel stats pivoted long→wide to `channel_<n>_<stat>`, numeric).
+   Results are extracted from Evidently's `as_dict()` `drift_by_columns`; each group's HTML plus a
+   combined `metrics.json` are written under `monitoring/reports/drift_<run>_<timestamp>/`, and one
+   `drift_report` row (`dataset_drift`/`n_columns_drifted`/`n_columns_total` aggregated across
+   groups, `report_path` = that dir) + its per-column `drift_report_column` rows
+   (`column_group` = the group name) are inserted via `DBLogger.log_drift_report`/
+   `log_drift_report_column`. `run_id` is taken from `--run-id`, or (when omitted) read off the
+   running API's `/model` endpoint via stdlib `urllib` (`--api-url` / `$API_BASE_URL`, default
+   `http://localhost:8000`) — so the drift job needs **no mlflow / tracking server**, and always
+   targets whatever model is actually being served. Window is `--window-days` (default 7) or
+   explicit `--window-start`/`--window-end`.
+   Evidently is pinned to `0.6.7` (last release of the classic
+   `evidently.report.Report`/`metric_preset`/`as_dict()` API; 0.7.x is an incompatible rewrite).
 
    **Important: the live-window query must exclude validation samples.** A validation well can
    legitimately be re-imaged and predicted through the API in production — that prediction is a
@@ -267,13 +280,24 @@ training-machine-specific absolute paths.
    from `reference_image_prediction`/`reference_tile_prediction` filtered by `run_id`. Both
    sides then get pivoted (channel stats long → wide: `channel_1_mean`, `channel_1_p95`, ...)
    and handed to Evidently as reference vs. current DataFrames.
-7. **`docker/jobs/monitoring/`** (new): `Dockerfile` (lightweight — `db_req.txt` + new
-   `requirements/monitoring_req.txt`, no torch/mlflow/timm) and `docker-compose.yaml`
-   (ephemeral `run --rm`, `pg_network` only), mirroring `docker/jobs/train/`'s shape. This is
-   deliberately the shape step 7 will later wrap in a cron/Airflow schedule — same image, same
-   command, just a different trigger. Add `drift-report-run` target to `docker/makefile`.
-8. **Dependencies**: new `requirements/monitoring_req.txt` with `evidently`, `pandas`,
-   `psycopg[binary,pool]`.
+7. **DONE**: `docker/jobs/monitoring/` — lightweight `Dockerfile` (`python:3.11-slim` +
+   `requirements/monitoring_req.txt` only; `db_req.txt` folded in since monitoring_req already
+   pins `psycopg` — no torch/mlflow/timm) with `database/` + `monitoring/` code baked in (COPY,
+   not mounted — this is a deployable/scheduled job). `docker-compose.yaml` is an ephemeral
+   `run --rm` job on **both** `pg_network` (Postgres) and `ml-platform` (to reach the `api`
+   service's `/model` endpoint for run_id resolution — the plan's original "pg_network only" was
+   revised because run_id now comes from the API, not mlflow), bind-mounting
+   `monitoring/reports/` for output persistence. Env via `.env.monitoring` (`API_DB_URI` +
+   `API_BASE_URL=http://api:8000`), with a committed `.env.monitoring.example`. Added
+   `drift-report-run` target to `docker/makefile` (mirrors `compute-reference`'s
+   `$(CMD)`-passthrough, defaulting to `python -m monitoring.run_drift_report`). This is
+   deliberately the shape a cron/Airflow schedule will later wrap — same image, same command,
+   just a different trigger.
+8. **DONE**: `requirements/monitoring_req.txt` with `evidently==0.6.7`, `pandas`,
+   `psycopg[binary,pool]`, `pydantic-settings` (needed by `monitoring.config.MonitoringSettings`,
+   a dedicated settings class with just `db_uri` + API `base_url` — not `api.config.Settings`,
+   which carries irrelevant model-serving fields); no `mlflow` — run_id is read off the API's
+   `/model` endpoint via stdlib `urllib`.
 9. **Tests** (`tests/monitoring/`, new): reference-builder integration tests against a real
    Postgres (matching `tests/db/test_dblogger.py` conventions, small synthetic manifest + fake
    images), and a fixture-based drift-script test with synthetic shifted vs. unshifted data

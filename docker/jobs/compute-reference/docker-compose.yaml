@@ -10,7 +10,7 @@ services:
       dockerfile: docker/services/api/Dockerfile
     image: image_classifier_api
     container_name: compute_reference
-    env_file: ../../services/api/.env.api
+    env_file: .env.api
     volumes:
       - ${O_DRIVE_PATH}:/mnt/O:rw
       - ../../../monitoring:/app/monitoring:ro

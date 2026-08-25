@@ -1,4 +1,5 @@
 import psycopg
+from psycopg.rows import dict_row
 
 
 class DBLogger:
@@ -190,6 +191,151 @@ class DBLogger:
                     """, (run_id,))
                     result = cursor.fetchall()
                     return result
+            except psycopg.OperationalError:
+                print("DB connection lost, reconnecting...")
+                self.connection = psycopg.connect(self.db_uri)
+        return None
+
+    # ── Drift reporting: reads for reference vs. current comparison ─────────
+
+    def _fetch_dicts(self, query: str, params: tuple) -> list[dict]:
+        """Run a read query and return rows as a list of dicts (column -> value)."""
+        for attempt in range(2):  # try once, reconnect and retry once
+            try:
+                with self.connection.cursor(row_factory=dict_row) as cursor:
+                    cursor.execute(query, params)
+                    return cursor.fetchall()
+            except psycopg.OperationalError:
+                print("DB connection lost, reconnecting...")
+                self.connection = psycopg.connect(self.db_uri)
+        return None
+
+    def fetch_reference_image_level(self, run_id: str) -> list[dict]:
+        """Image-level reference rows for a run: (p_label, vote_fraction, avg_confidence)."""
+        return self._fetch_dicts("""
+            SELECT p_label, vote_fraction, avg_confidence
+            FROM reference_image_prediction
+            WHERE run_id = %s
+        """, (run_id,))
+
+    def fetch_current_image_level(self, run_id: str, window_start, window_end) -> list[dict]:
+        """Image-level production rows in [window_start, window_end) for a run.
+
+        Excludes wells that belong to this run's reference set, so the drift
+        window is never compared partly against the reference itself (a
+        validation well can legitimately be re-imaged and predicted in prod).
+        """
+        return self._fetch_dicts("""
+            SELECT l.p_label, l.vote_fraction, l.avg_confidence
+            FROM live_image_prediction l
+            WHERE l.run_id = %s
+              AND l.created_at >= %s
+              AND l.created_at <  %s
+              AND NOT EXISTS (
+                  SELECT 1 FROM reference_image_prediction r
+                  WHERE r.run_id = l.run_id
+                    AND r.plate  = l.plate
+                    AND r.well   = l.well
+                    AND r.field  = l.field
+              )
+        """, (run_id, window_start, window_end))
+
+    def fetch_reference_tile_level(self, run_id: str) -> list[dict]:
+        """Tile-level reference rows + per-channel input stats for a run.
+
+        One row per (tile_prediction, channel): tile_pred_id and confidence
+        repeat across the tile's channels; caller dedups for confidence and
+        pivots the channel stats long -> wide.
+        """
+        return self._fetch_dicts("""
+            SELECT t.id AS tile_pred_id,
+                   t.p_label,
+                   t.confidence,
+                   im.channel AS channel,
+                   s.mean, s.std, s.p1, s.p5, s.p95, s.p99
+            FROM reference_tile_prediction t
+            JOIN tile_stack_member tsm     ON tsm.tile_stack_id = t.tile_stack_id
+            JOIN image_metadata im         ON im.id = tsm.image_id
+            LEFT JOIN tile_channel_stats s ON s.tile_stack_member_id = tsm.id
+            WHERE t.run_id = %s
+        """, (run_id,))
+
+    def fetch_current_tile_level(self, run_id: str, window_start, window_end) -> list[dict]:
+        """Tile-level production rows + per-channel input stats in the window.
+
+        Same reference-well exclusion as fetch_current_image_level, applied via
+        the parent image_prediction row.
+        """
+        return self._fetch_dicts("""
+            SELECT t.id AS tile_pred_id,
+                   t.p_label,
+                   t.confidence,
+                   im.channel AS channel,
+                   s.mean, s.std, s.p1, s.p5, s.p95, s.p99
+            FROM live_tile_prediction t
+            JOIN live_image_prediction l   ON l.id = t.image_pred_id
+            JOIN tile_stack_member tsm     ON tsm.tile_stack_id = t.tile_stack_id
+            JOIN image_metadata im         ON im.id = tsm.image_id
+            LEFT JOIN tile_channel_stats s ON s.tile_stack_member_id = tsm.id
+            WHERE t.run_id = %s
+              AND t.created_at >= %s
+              AND t.created_at <  %s
+              AND NOT EXISTS (
+                  SELECT 1 FROM reference_image_prediction r
+                  WHERE r.run_id = l.run_id
+                    AND r.plate  = l.plate
+                    AND r.well   = l.well
+                    AND r.field  = l.field
+              )
+        """, (run_id, window_start, window_end))
+
+    # ── Drift reporting: writes ──────────────────────────────────────────────
+
+    def log_drift_report(self, drift_report: tuple):
+        """Insert one drift-report row and return its id.
+
+        Args:
+            drift_report: tuple
+                (run_id, window_start, window_end, dataset_drift,
+                 n_columns_drifted, n_columns_total, report_path)
+        """
+        for attempt in range(2):  # try once, reconnect and retry once
+            try:
+                with self.connection.cursor() as cursor:
+                    cursor.execute("""
+                    INSERT INTO drift_report
+                        (run_id, window_start, window_end, dataset_drift,
+                         n_columns_drifted, n_columns_total, report_path)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id
+                """, drift_report)
+                    drift_report_id = cursor.fetchone()[0]
+                self.connection.commit()
+                return drift_report_id
+            except psycopg.OperationalError:
+                print("DB connection lost, reconnecting...")
+                self.connection = psycopg.connect(self.db_uri)
+        return None
+
+    def log_drift_report_column(self, drift_report_columns: list[tuple]):
+        """Insert per-column drift results for a drift report.
+
+        Args:
+            drift_report_columns: list of tuples, each:
+                (drift_report_id, column_name, column_group, drift_score,
+                 drifted, stat_test)
+        """
+        for attempt in range(2):  # try once, reconnect and retry once
+            try:
+                with self.connection.cursor() as cursor:
+                    cursor.executemany("""
+                    INSERT INTO drift_report_column
+                        (drift_report_id, column_name, column_group,
+                         drift_score, drifted, stat_test)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, drift_report_columns)
+                self.connection.commit()
+                return len(drift_report_columns)
             except psycopg.OperationalError:
                 print("DB connection lost, reconnecting...")
                 self.connection = psycopg.connect(self.db_uri)
