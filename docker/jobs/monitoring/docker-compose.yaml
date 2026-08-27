@@ -1,8 +1,12 @@
-# Ephemeral job: runs the Evidently drift report for the served model and
-# writes the result to Postgres + monitoring/reports/. Lightweight dedicated
-# image (no torch/mlflow/timm). This is deliberately the shape a scheduler
-# (cron/Airflow) will wrap later -- same image, same command, just a
-# different trigger.
+# Ephemeral jobs sharing one lightweight image (no torch/mlflow/timm): drift
+# report, quality report, label backfill, and benchmark registration. Each is
+# deliberately the shape a scheduler (cron/Airflow) will wrap later -- same
+# image, same command, just a different trigger.
+#
+# label-backfill and register-benchmark additionally mount the external tools
+# library read-only (see docker/jobs/train for the same pattern); the
+# Dockerfile's entrypoint installs it at container start. It's a no-op for
+# drift-report/quality-report, which don't mount it.
 #
 # Needs pg_network (Postgres) and ml-platform (to reach the api service's
 # /model endpoint for run_id resolution; api is attached to both).
@@ -11,13 +15,51 @@ services:
     build:
       context: ../../..
       dockerfile: docker/jobs/monitoring/Dockerfile
-    image: image_classifier_drift
+    image: image_classifier_monitoring
     container_name: drift_report
     env_file: .env.monitoring
     volumes:
       - ../../../monitoring/reports:/app/monitoring/reports:rw
     networks:
       - ml-platform
+      - pg_network
+
+  quality-report:
+    build:
+      context: ../../..
+      dockerfile: docker/jobs/monitoring/Dockerfile
+    image: image_classifier_monitoring
+    container_name: quality_report
+    env_file: .env.monitoring
+    volumes:
+      - ../../../monitoring/reports:/app/monitoring/reports:rw
+    networks:
+      - ml-platform
+      - pg_network
+
+  label-backfill:
+    build:
+      context: ../../..
+      dockerfile: docker/jobs/monitoring/Dockerfile
+    image: image_classifier_monitoring
+    container_name: label_backfill
+    env_file: .env.monitoring
+    volumes:
+      - ${TOOLS_LIB_PATH}:/app/tools:ro # access to tools library
+    networks:
+      - pg_network
+
+  register-benchmark:
+    build:
+      context: ../../..
+      dockerfile: docker/jobs/monitoring/Dockerfile
+    image: image_classifier_monitoring
+    container_name: register_benchmark
+    env_file: .env.monitoring
+    volumes:
+      - ${O_DRIVE_PATH}:/mnt/O:ro # benchmark image files
+      - ${TOOLS_LIB_PATH}:/app/tools:ro # access to tools library
+    networks:
       - pg_network
 
 networks:

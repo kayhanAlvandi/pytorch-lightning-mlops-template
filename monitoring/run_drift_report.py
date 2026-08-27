@@ -31,39 +31,15 @@ from __future__ import annotations
 
 import argparse
 import json
-import urllib.request
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
 
 from database.dblogger import DBLogger
-from monitoring.config import MonitoringSettings
+from monitoring.config import MonitoringSettings, resolve_run_id, resolve_window
 
 CHANNEL_STAT_COLS = ["mean", "std", "p1", "p5", "p95", "p99"]
-
-
-def resolve_run_id(run_id: str | None, api_url: str) -> str | None:
-    """Resolve the target serving model's MLflow run_id.
-
-    An explicit ``run_id`` wins. Otherwise it's read off the running API's
-    ``/model`` endpoint -- the API already loaded the model and knows its
-    run_id, so the drift job doesn't need mlflow (or the tracking server) at
-    all, just an HTTP GET against whatever model is actually being served.
-    """
-    if run_id:
-        return run_id
-
-    url = f"{api_url.rstrip('/')}/model"
-    try:
-        with urllib.request.urlopen(url, timeout=10) as resp:
-            info = json.load(resp)
-    except Exception as e:
-        raise RuntimeError(
-            f"Could not read run_id from the API at {url} ({e}). "
-            f"Is the API running? Otherwise pass --run-id explicitly."
-        ) from e
-    return info.get("run_id")
 
 
 def pivot_channel_stats(rows: list[dict]) -> pd.DataFrame:
@@ -173,14 +149,12 @@ def main():
         print("ERROR: No database URI configured. Set API_DB_URI.")
         return
 
-    window_end = datetime.fromisoformat(args.window_end) if args.window_end else datetime.now()
-    window_start = (
-        datetime.fromisoformat(args.window_start)
-        if args.window_start
-        else window_end - timedelta(days=args.window_days)
-    )
-    if window_start >= window_end:
-        print(f"ERROR: window_start ({window_start}) must be before window_end ({window_end}).")
+    try:
+        window_start, window_end = resolve_window(
+            args.window_start, args.window_end, args.window_days
+        )
+    except ValueError as e:
+        print(f"ERROR: {e}")
         return
 
     run_id = resolve_run_id(args.run_id, args.api_url or settings.base_url)

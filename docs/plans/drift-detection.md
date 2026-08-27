@@ -298,15 +298,9 @@ training-machine-specific absolute paths.
    a dedicated settings class with just `db_uri` + API `base_url` — not `api.config.Settings`,
    which carries irrelevant model-serving fields); no `mlflow` — run_id is read off the API's
    `/model` endpoint via stdlib `urllib`.
-9. **Tests** (`tests/monitoring/`, new): reference-builder integration tests against a real
-   Postgres (matching `tests/db/test_dblogger.py` conventions, small synthetic manifest + fake
-   images), and a fixture-based drift-script test with synthetic shifted vs. unshifted data
-   (assert `drift_report`/`drift_report_column` rows correctly flag the shifted column and not
-   the stable one).
-10. **CI**: new `.github/workflows/ci_monitoring.yml` mirroring `ci_db.yml`'s Postgres-service
-    pattern (spin up Postgres, apply `01_prediction.sql` + `02_refrence.sql`, run
-    `pytest tests/monitoring/`), scoped to `database/**`, `monitoring/**`, `tests/monitoring/**`,
-    `requirements/monitoring_req.txt`, `docker/jobs/monitoring/**`.
+**Tests & CI**: moved to `docs/plans/quality-tracking.md` — done once, together, for all of
+`monitoring/` (this drift work + the supervised label-backfill/quality-report work), after both
+are implemented.
 
 ## Framing note (for README/docs later)
 

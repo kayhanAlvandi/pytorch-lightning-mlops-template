@@ -503,13 +503,14 @@ class TilePredictor:
                 image_prediction["vote_fraction"],
                 image_prediction["confidence"],
                 image_metadata.get("is_reference", False),
+                image_metadata.get("benchmark_id", None),
             )
             img_pred_id = self.db_logger.log_image_prediction(image_prediction_db)
             # Log tile predictions (one row per tile)
             tile_predictions_db = [
                 (img_pred_id, tile_stack_ids[i], self.model_info["run_id"],
                  tile["predicted_class"], image_metadata.get("label", None), tile["confidence"],
-                 image_metadata.get("is_reference", False))
+                 image_metadata.get("is_reference", False), image_metadata.get("benchmark_id", None))
                 for i, tile in enumerate(tile_predictions)
             ]
             self.db_logger.log_tile_prediction(tile_predictions_db)
