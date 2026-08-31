@@ -28,7 +28,10 @@ from pathlib import Path
 import hydra
 from omegaconf import DictConfig, OmegaConf
 
-from src.dataset_versioning import create_manifest_from_samples, create_metadata_from_samples
+from src.dataset_versioning import (
+    create_manifest_from_samples,
+    create_metadata_from_samples,
+)
 from src.sample_selection import DatasetSpec, build_dataset
 
 

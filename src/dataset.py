@@ -19,7 +19,12 @@ from torch.utils.data import Dataset
 from utils.filename_parser import FILENAME_PATTERN
 from utils.labels import DEFAULT_DUMMY_CLASSES, resolve_labels_for_wells
 
-from .sample_selection import SUPPORTED_EXTENSIONS, build_samples, scan_directory, wells_from_index
+from .sample_selection import (
+    SUPPORTED_EXTENSIONS,
+    build_samples,
+    scan_directory,
+    wells_from_index,
+)
 
 try:
     import pillow_jxl  # JXL support for PIL  # noqa: F401

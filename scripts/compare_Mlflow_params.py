@@ -28,8 +28,8 @@ import sys
 from pathlib import Path
 
 import mlflow
-from mlflow.tracking import MlflowClient
 import pandas as pd
+from mlflow.tracking import MlflowClient
 
 # Defaults
 TRACKING_URI = "sqlite:///mlflow.db"

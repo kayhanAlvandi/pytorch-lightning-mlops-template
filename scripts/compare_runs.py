@@ -12,10 +12,11 @@ Examples:
 import argparse
 import sys
 import tempfile
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 import yaml
 from mlflow.tracking import MlflowClient
+
 
 # ANSI color codes
 class Colors:
@@ -35,7 +36,7 @@ def colored(text: str, *styles: str) -> str:
     return "".join(styles) + str(text) + Colors.RESET
 
 
-def get_run_by_name(client: MlflowClient, run_name: str, experiment_name: str = "image_classifier") -> Optional[str]:
+def get_run_by_name(client: MlflowClient, run_name: str, experiment_name: str = "image_classifier") -> str | None:
     """Find run ID by run name."""
     experiment = client.get_experiment_by_name(experiment_name)
     if experiment is None:
@@ -55,7 +56,7 @@ def get_run_by_name(client: MlflowClient, run_name: str, experiment_name: str = 
     return runs[0].info.run_id
 
 
-def load_config_artifact(client: MlflowClient, run_id: str, artifact_name: str = "config.yaml", temp_dir: str = None) -> Dict[str, Any]:
+def load_config_artifact(client: MlflowClient, run_id: str, artifact_name: str = "config.yaml", temp_dir: str = None) -> dict[str, Any]:
     """Download and load config artifact from a run to a temp directory."""
     try:
         local_path = client.download_artifacts(run_id, artifact_name, dst_path=temp_dir)
@@ -66,7 +67,7 @@ def load_config_artifact(client: MlflowClient, run_id: str, artifact_name: str =
         return {}
 
 
-def flatten_dict(d: Dict[str, Any], parent_key: str = "", sep: str = ".") -> Dict[str, Any]:
+def flatten_dict(d: dict[str, Any], parent_key: str = "", sep: str = ".") -> dict[str, Any]:
     """Flatten nested dict with dot notation keys."""
     items = []
     for k, v in d.items():
@@ -136,7 +137,7 @@ def deep_diff(v1: Any, v2: Any, path: str = "") -> list:
     return diffs
 
 
-def compare_configs(cfg1: Dict[str, Any], cfg2: Dict[str, Any], name1: str, name2: str) -> Tuple[int, int, int]:
+def compare_configs(cfg1: dict[str, Any], cfg2: dict[str, Any], name1: str, name2: str) -> tuple[int, int, int]:
     """Compare two configs and print differences using deep recursive comparison."""
     # Use deep_diff for recursive comparison
     all_diffs = deep_diff(cfg1, cfg2)

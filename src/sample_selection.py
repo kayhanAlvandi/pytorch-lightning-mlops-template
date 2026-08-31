@@ -26,7 +26,8 @@ from __future__ import annotations
 
 import random
 from collections import defaultdict
-from dataclasses import asdict, dataclass, field as dataclass_field
+from dataclasses import asdict, dataclass
+from dataclasses import field as dataclass_field
 from pathlib import Path
 
 from utils.filename_parser import FILENAME_PATTERN
@@ -239,7 +240,7 @@ class DatasetSpec:
         return asdict(self)
 
     @classmethod
-    def from_datamodule_cfg(cls, cfg, name: str = "dataset") -> "DatasetSpec":
+    def from_datamodule_cfg(cls, cfg, name: str = "dataset") -> DatasetSpec:
         """Build a spec from a training datamodule config (hydra or plain dict).
 
         Reads only the selection keys, so the same YAML that trained a model can

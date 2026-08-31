@@ -1,9 +1,10 @@
 """Test what gets saved in save_hyperparameters with OmegaConf inputs."""
-import torch
-import pytorch_lightning as pl
-from omegaconf import OmegaConf
-from hydra.utils import instantiate
 import os
+
+import pytorch_lightning as pl
+import torch
+from hydra.utils import instantiate
+from omegaconf import OmegaConf
 
 
 class TestModel(pl.LightningModule):
