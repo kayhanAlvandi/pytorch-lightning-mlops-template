@@ -1,0 +1,60 @@
+# Ephemeral jobs sharing the api service's image/build (already has
+# mlflow/torch/timm/psycopg -- no dedicated Dockerfile needed): reference
+# (validation-set) predictions for drift detection, and benchmark predictions
+# for supervised quality monitoring. Only monitoring/ is bind-mounted so
+# editing the job scripts doesn't require rebuilding the (heavier,
+# long-running) api image.
+#
+# Benchmark samples themselves are registered separately by register-benchmark
+# (docker/jobs/monitoring, lightweight image -- no inference needed there).
+#
+# Both resolve the model to score via API_MODEL_NAME/API_RUN_NAME in
+# .env.api, and are resumable (skip samples already scored for that run_id).
+services:
+  compute-reference:
+    build:
+      context: ../../..
+      dockerfile: docker/services/api/Dockerfile
+    image: image_classifier_api
+    container_name: compute_reference
+    env_file: .env.api
+    volumes:
+      - ${O_DRIVE_PATH}:/mnt/O:rw
+      - ../../../monitoring:/app/monitoring:ro
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    networks:
+      - ml-platform
+      - pg_network
+
+  compute-benchmark:
+    build:
+      context: ../../..
+      dockerfile: docker/services/api/Dockerfile
+    image: image_classifier_api
+    container_name: compute_benchmark
+    env_file: .env.api
+    volumes:
+      - ${O_DRIVE_PATH}:/mnt/O:rw
+      - ../../../monitoring:/app/monitoring:ro
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    networks:
+      - ml-platform
+      - pg_network
+
+networks:
+  ml-platform:
+    external: true
+  pg_network:
+    external: true

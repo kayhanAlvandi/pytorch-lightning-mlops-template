@@ -11,6 +11,7 @@ services:
       - ../../../train.py:/workspace/train.py:ro # training script
       - ../../../configs:/workspace/configs:ro # config files
       - ../../../src:/workspace/src:ro # source code
+      - ../../../utils:/workspace/utils:ro # utils directory
       - ../../../logs:/workspace/logs:rw # tensorboard logs
     deploy:
       resources:

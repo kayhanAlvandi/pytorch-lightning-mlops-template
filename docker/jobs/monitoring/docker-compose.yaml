@@ -49,6 +49,10 @@ services:
     networks:
       - pg_network
 
+  # Preferred input is a frozen manifest from scripts/build_dataset.py, which
+  # already carries labels and image shapes -- then only data/ and Postgres are
+  # needed. The image/tools mounts are for the fallback glob mode, which parses
+  # filenames, reads shapes off disk and resolves labels from MongoDB.
   register-benchmark:
     build:
       context: ../../..
@@ -57,8 +61,9 @@ services:
     container_name: register_benchmark
     env_file: .env.monitoring
     volumes:
-      - ${O_DRIVE_PATH}:/mnt/O:ro # benchmark image files
-      - ${TOOLS_LIB_PATH}:/app/tools:ro # access to tools library
+      - ../../../data:/app/data:ro # built dataset manifests
+      - ${O_DRIVE_PATH}:/mnt/O:ro # benchmark image files (glob mode only)
+      - ${TOOLS_LIB_PATH}:/app/tools:ro # access to tools library (glob mode only)
     networks:
       - pg_network
 

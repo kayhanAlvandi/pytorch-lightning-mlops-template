@@ -90,6 +90,9 @@ def tiled_datamodule(synthetic_image_dir, balanced_labels, monkeypatch):
         def __init__(self, *args, **kwargs):
             pass
 
+        def get_labels_for_wells(self, wells):
+            return dict(forced)
+
         def get_labels(self, root_dir, exclude_wells=None):
             return dict(forced)
 

@@ -290,8 +290,9 @@ CREATE INDEX IF NOT EXISTS idx_quality_report_run_id ON quality_report(run_id, c
   `register-benchmark` services (the latter two mount `${TOOLS_LIB_PATH}:/app/tools:ro`;
   `register-benchmark` additionally mounts `${O_DRIVE_PATH}:/mnt/O:ro`).
 - `docker/jobs/monitoring/.env` + `.env.example` (new) — `TOOLS_LIB_PATH`, `O_DRIVE_PATH`.
-- `docker/jobs/compute-benchmark/{docker-compose.yaml,.env,.env.example,.env.api,.env.api.example}`
-  (new) — reuses the api image (real inference needed), mirrors `compute-reference` exactly.
+- `docker/jobs/compute/docker-compose.yaml` — merged `compute-reference` (was its own dir) and
+  a new `compute-benchmark` service into one file, sharing `.env`/`.env.api`; both reuse the api
+  image (real inference needed), same pattern as `docker/jobs/monitoring`'s multi-service file.
 - `docker/makefile` — add `quality-report-run`, `label-backfill-run`, `register-benchmark-run`,
   `compute-benchmark` targets.
 

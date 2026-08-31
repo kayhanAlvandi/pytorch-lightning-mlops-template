@@ -7,6 +7,10 @@ each ``(plate, well)``'s treatment in the shared MongoDB (via the external
 ``src/dataset.py``), and writes the label back onto every matching production
 row -- image-level and its child tile-level rows.
 
+The MongoDB lookup itself lives in ``utils/labels.py``, shared with training's
+label providers (``src/dataset.py``) and the dataset builder, so there is one
+implementation of "wells -> treatments" rather than one per caller.
+
 Label backfill is global by well: a MongoDB label is a property of the physical
 sample ``(plate, well)``, not of which model predicted it, so a resolved label
 updates all matching production rows regardless of ``run_id``. Reference and
@@ -23,33 +27,7 @@ from __future__ import annotations
 
 from database.dblogger import DBLogger
 from monitoring.config import MonitoringSettings
-
-
-def resolve_labels(wells: list[tuple[str, str]]) -> dict[tuple[str, str], str]:
-    """Look up treatments for (plate, well) pairs in MongoDB.
-
-    Uses the same call shape as ``MongoDBLabelsProvider.get_labels`` in
-    ``src/dataset.py``: a ``Plate``/``Well`` DataFrame through
-    ``tools.loading.getCategories(..., collection="tags")``, reading the
-    resulting ``Treatment`` column. Returns a ``{(plate, well): treatment}``
-    mapping containing only wells that resolved to a non-empty treatment.
-    """
-    import pandas as pd
-    from tools.loading import getCategories
-
-    df = pd.DataFrame({"Plate": [w[0] for w in wells], "Well": [w[1] for w in wells]})
-    df.drop_duplicates(inplace=True)
-
-    df_labels = getCategories(df, collection="tags")
-    if "Treatment" not in df_labels.columns:
-        print("WARNING: getCategories returned no 'Treatment' column -- no labels available.")
-        return {}
-
-    labels: dict[tuple[str, str], str] = {}
-    for plate, well, treatment in zip(df_labels["Plate"], df_labels["Well"], df_labels["Treatment"]):
-        if treatment is not None and str(treatment) != "" and not pd.isna(treatment):
-            labels[(plate, well)] = str(treatment)
-    return labels
+from utils.labels import resolve_labels_from_mongodb as resolve_labels
 
 
 def main():

@@ -8,11 +8,17 @@ field)`` with its known ``t_label``, and the ``benchmark_dataset_member`` rows
 linking them. No model and no inference are involved here -- scoring the
 benchmark for a specific model is a separate step (``compute_benchmark.py``).
 
-Input is a set of image file paths (e.g. from a glob); ``(plate, well, field,
-channel)`` are parsed from each filename with the same parser the API uses, so
-parsing stays consistent with production. Ground-truth labels are resolved per
-``(plate, well)`` from MongoDB (same ``tools.loading.getCategories`` path as
-training/backfill); samples whose well has no label yet are skipped.
+Two input modes:
+
+``--manifest`` (preferred) reads a frozen dataset manifest built by
+``scripts/build_dataset.py`` -- labels, channel files and image shapes are all
+recorded in it, so registration touches neither the image files nor MongoDB and
+is fully reproducible from a reviewed, committed artifact.
+
+Positional globs are the fallback: ``(plate, well, field, channel)`` are parsed
+from each filename with the same parser the API uses, shapes are read from the
+files, and labels are resolved per ``(plate, well)`` from MongoDB. This needs the
+image mount and the external ``tools`` package; the manifest mode needs neither.
 
 Idempotent: ``benchmark_dataset`` is keyed on ``(plate, well, field)`` and
 already-registered samples are skipped, so it is safe to rerun as the benchmark
@@ -21,13 +27,12 @@ set grows.
 from __future__ import annotations
 
 import argparse
+import json
 from glob import glob
 from pathlib import Path
 
 from database.dblogger import DBLogger
-from monitoring.backfill_labels import resolve_labels
 from monitoring.config import MonitoringSettings
-from utils.filename_parser import extract_info_from_filename
 
 
 def _read_shape(file_path: Path) -> tuple[int, int]:
@@ -49,6 +54,8 @@ def group_samples(paths: list[str]) -> dict[tuple[str, str, int], list[dict]]:
     Each grouped file dict carries plate, well, field, channel, root_path,
     file_name. Files with unrecognised names (no plate/well parsed) are skipped.
     """
+    from utils.filename_parser import extract_info_from_filename
+
     samples: dict[tuple[str, str, int], list[dict]] = {}
     for p in paths:
         path = Path(p)
@@ -68,31 +75,92 @@ def group_samples(paths: list[str]) -> dict[tuple[str, str, int], list[dict]]:
     return samples
 
 
+def samples_from_manifest(manifest_path: str) -> tuple[dict[tuple[str, str, int], list[dict]],
+                                                       dict[tuple[str, str, int], str]]:
+    """Read a built dataset manifest into grouped files + per-sample labels.
+
+    Accepts either the flat ``{"samples": [...]}`` form written by
+    ``create_manifest_from_samples`` or a training manifest's ``train_samples``/
+    ``val_samples`` lists. Entries must carry ``shape`` (built with
+    ``shape_mode`` set), since nothing here reopens the image files.
+    """
+    with open(manifest_path) as f:
+        manifest = json.load(f)
+
+    entries = manifest.get("samples")
+    if entries is None:
+        entries = manifest.get("train_samples", []) + manifest.get("val_samples", [])
+
+    samples: dict[tuple[str, str, int], list[dict]] = {}
+    labels: dict[tuple[str, str, int], str] = {}
+    for entry in entries:
+        key = (entry["plate"], entry["well"], int(entry["field"]))
+        shape = entry.get("shape")
+        if not shape:
+            raise ValueError(
+                f"Manifest entry {key} has no 'shape'. Rebuild the dataset with "
+                "shape_mode=per_sample so image sizes are recorded "
+                "(python scripts/build_dataset.py ... shape_mode=per_sample)."
+            )
+        labels[key] = entry["label"]
+        for channel, file_name in entry["channel_files"].items():
+            samples.setdefault(key, []).append({
+                "plate": entry["plate"],
+                "well": entry["well"],
+                "field": int(entry["field"]),
+                "channel": int(channel),
+                "root_path": entry["root_path"],
+                "file_name": file_name,
+                "shape": (int(shape[0]), int(shape[1])),
+            })
+    return samples, labels
+
+
+def collect_paths(globs: list[str], file: str | None) -> list[str]:
+    """Expand glob patterns / read a path list file into a sorted path list."""
+    paths: list[str] = []
+    if file:
+        with open(file, "r") as f:
+            paths = [line.strip() for line in f if line.strip()]
+    else:
+        for pattern in globs:
+            matched = glob(pattern)
+            paths.extend(matched) if matched else paths.append(pattern)
+    return sorted(set(paths))
+
+
 def main():
     parser = argparse.ArgumentParser(description="Register benchmark samples into the database.")
-    parser.add_argument("globs", nargs="+",
-                        help="One or more glob patterns (or explicit paths) of benchmark image "
-                             "files, e.g. '/mnt/O/benchmark/*.jxl'.")
+    parser.add_argument("globs", nargs="*",
+                        help="Fallback input: glob patterns (or explicit paths) of benchmark "
+                             "image files, e.g. '/mnt/O/benchmark/*.jxl'. Needs the image mount "
+                             "and MongoDB; prefer --manifest.")
+    parser.add_argument("--manifest",
+                        help="Path to a dataset manifest built by scripts/build_dataset.py "
+                             "(e.g. data/benchmark_v1/dataset_manifest.json). Labels and image "
+                             "shapes come from the manifest, so no image or MongoDB access is "
+                             "needed.")
     parser.add_argument("--file", help="path to txt file containing list of benchmark image files")
     args = parser.parse_args()
+
+    if not args.manifest and not args.globs and not args.file:
+        parser.error("Provide --manifest (preferred), or glob patterns / --file.")
 
     settings = MonitoringSettings()
     if not settings.has_db_uri:
         print("ERROR: No database URI configured. Set MONITORING_DB_URI.")
         return
 
-    paths: list[str] = []
-    if args.file:
-        with open(args.file, "r") as f:
-            paths = [line.strip() for line in f if line.strip()]
+    # Manifest mode carries its own labels; glob mode resolves them from MongoDB.
+    manifest_labels: dict[tuple[str, str, int], str] | None = None
+    if args.manifest:
+        print(f"Reading benchmark samples from manifest: {args.manifest}")
+        samples, manifest_labels = samples_from_manifest(args.manifest)
     else:
-        for pattern in args.globs:
-            matched = glob(pattern)
-            paths.extend(matched) if matched else paths.append(pattern)
-    paths = sorted(set(paths))
-    print(f"Found {len(paths)} candidate image files.")
+        paths = collect_paths(args.globs, args.file)
+        print(f"Found {len(paths)} candidate image files.")
+        samples = group_samples(paths)
 
-    samples = group_samples(paths)
     print(f"Grouped into {len(samples)} benchmark samples (plate, well, field).")
     if not samples:
         print("Nothing to register.")
@@ -114,24 +182,34 @@ def main():
             print("Nothing to do.")
             return
 
-        # Resolve labels once for all distinct wells.
-        wells = sorted({(plate, well) for (plate, well, _field) in pending})
-        labels = resolve_labels(wells)
-        print(f"MongoDB resolved {len(labels)} / {len(wells)} wells to a treatment.")
+        if manifest_labels is None:
+            # Resolve labels once for all distinct wells.
+            from utils.labels import resolve_labels_from_mongodb
+
+            wells = sorted({(plate, well) for (plate, well, _field) in pending})
+            well_labels = resolve_labels_from_mongodb(wells)
+            print(f"MongoDB resolved {len(well_labels)} / {len(wells)} wells to a treatment.")
+            labels = {key: well_labels.get((key[0], key[1])) for key in pending}
+        else:
+            labels = manifest_labels
 
         n_ok, n_skipped = 0, 0
-        for (plate, well, field), files in pending.items():
-            t_label = labels.get((plate, well))
+        for key, files in pending.items():
+            plate, well, field = key
+            t_label = labels.get(key)
             if t_label is None:
                 n_skipped += 1
-                print(f"  skip {plate}/{well}/{field}: no label in MongoDB yet")
+                print(f"  skip {plate}/{well}/{field}: no label available yet")
                 continue
 
             # Channels ascending (matches training/predict input channel order).
             files_sorted = sorted(files, key=lambda f: f["channel"])
             image_rows = []
             for f in files_sorted:
-                shape_x, shape_y = _read_shape(Path(f["root_path"]) / f["file_name"])
+                # Manifest entries carry the shape; glob mode reads it off disk.
+                shape_x, shape_y = f.get("shape") or _read_shape(
+                    Path(f["root_path"]) / f["file_name"]
+                )
                 image_rows.append((
                     f["plate"], f["well"], f["field"], f["channel"],
                     f["root_path"], f["file_name"], shape_x, shape_y,

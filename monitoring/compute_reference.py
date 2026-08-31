@@ -72,6 +72,7 @@ def load_validation_data(val_samples: list[dict]) -> tuple[list[list[np.ndarray]
         image_metadata = sample.copy()
         image_metadata["channel_files"] = channel_files
         image_metadata["channels"] = channels
+        image_metadata["field"] = int(sample["field"])
         image_metadata["shape"] = sample_image[0].shape
         image_metadata["is_reference"] = True
         images_metadata.append(image_metadata)
@@ -144,10 +145,16 @@ def main():
 
         # Skip samples that already have a reference row for this run_id, so an
         # interrupted run resumes instead of re-inserting duplicate rows.
-        already_done = set(db_logger.get_reference_samples(run_id) or [])
+        # field is coerced to int on both sides: image_metadata.field is INTEGER,
+        # while older manifests stored the raw zero-padded string ("001"), which
+        # would never compare equal and silently defeat the resume.
+        already_done = {
+            (plate, well, int(field)) for plate, well, field in
+            (db_logger.get_reference_samples(run_id) or [])
+        }
         remaining = [
             s for s in val_samples
-            if (s["plate"], s["well"], s["field"]) not in already_done
+            if (s["plate"], s["well"], int(s["field"])) not in already_done
         ]
         print(f"{len(already_done)} / {len(val_samples)} validation samples already have "
               f"reference rows for run_id={run_id}; processing {len(remaining)} remaining.")
