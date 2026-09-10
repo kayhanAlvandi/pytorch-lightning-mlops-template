@@ -493,7 +493,7 @@ class DBLogger:
     def get_benchmark_predictions(self, run_id: str) -> list[int]:
         """benchmark_dataset ids already scored (have an image_prediction) for run_id.
 
-        Lets compute_benchmark resume without re-scoring samples it already has.
+        Lets compute_predictions_references resume without re-scoring samples it already has.
         """
         for attempt in range(2):  # try once, reconnect and retry once
             try:

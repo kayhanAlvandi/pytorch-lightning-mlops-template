@@ -1,9 +1,10 @@
 """Supervised quality report: benchmark baseline vs. labeled production window.
 
 Compares a served model's supervised quality on its fixed benchmark set (the
-baseline, scored once by compute_benchmark.py) against its quality on the
-labeled portion of a recent production window (labels backfilled from MongoDB by
-backfill_labels.py). Both sides compare the predicted label (``p_label``)
+baseline, scored once by ``compute_predictions_references.py --target
+benchmark``) against its quality on the labeled portion of a recent
+production window (labels backfilled from MongoDB by backfill_labels.py).
+Both sides compare the predicted label (``p_label``)
 against the true label (``t_label``) with Evidently's ``ClassificationPreset``
 (accuracy, F1, confusion matrix, ...).
 
@@ -121,7 +122,9 @@ def main():
     try:
         benchmark_df = pd.DataFrame(db_logger.fetch_benchmark_quality(run_id) or [])
         if benchmark_df.empty:
-            print("ERROR: no benchmark predictions for this run_id. Run compute-benchmark first.")
+            print("ERROR: no benchmark predictions for this run_id. "
+                  "Run 'make compute-predictions-references CMD=\"python -m "
+                  "monitoring.compute_predictions_references --target benchmark\"' first.")
             return
 
         current_df = pd.DataFrame(db_logger.fetch_current_quality(run_id, window_start, window_end) or [])

@@ -6,7 +6,8 @@ those samples into the database: it inserts their single-channel image files
 into ``image_metadata``, one ``benchmark_dataset`` row per ``(plate, well,
 field)`` with its known ``t_label``, and the ``benchmark_dataset_member`` rows
 linking them. No model and no inference are involved here -- scoring the
-benchmark for a specific model is a separate step (``compute_benchmark.py``).
+benchmark for a specific model is a separate step
+(``compute_predictions_references.py --target benchmark``).
 
 Two input modes:
 
@@ -38,7 +39,7 @@ from monitoring.config import MonitoringSettings
 def _read_shape(file_path: Path) -> tuple[int, int]:
     """Read (shape_x, shape_y) = (height, width) without loading full pixels.
 
-    Matches compute_reference's convention (shape_x = rows/H, shape_y = cols/W).
+    Matches compute_predictions_references' convention (shape_x = rows/H, shape_y = cols/W).
     """
     import pillow_jxl  # noqa: F401  register JXL support with PIL
     from PIL import Image
@@ -116,16 +117,12 @@ def samples_from_manifest(manifest_path: str) -> tuple[dict[tuple[str, str, int]
     return samples, labels
 
 
-def collect_paths(globs: list[str], file: str | None) -> list[str]:
-    """Expand glob patterns / read a path list file into a sorted path list."""
+def collect_paths(globs: list[str]) -> list[str]:
+    """Expand glob patterns into a sorted path list."""
     paths: list[str] = []
-    if file:
-        with open(file, "r") as f:
-            paths = [line.strip() for line in f if line.strip()]
-    else:
-        for pattern in globs:
-            matched = glob(pattern)
-            paths.extend(matched) if matched else paths.append(pattern)
+    for pattern in globs:
+        matched = glob(pattern)
+        paths.extend(matched) if matched else paths.append(pattern)
     return sorted(set(paths))
 
 
@@ -140,11 +137,10 @@ def main():
                              "(e.g. data/benchmark_v1/dataset_manifest.json). Labels and image "
                              "shapes come from the manifest, so no image or MongoDB access is "
                              "needed.")
-    parser.add_argument("--file", help="path to txt file containing list of benchmark image files")
     args = parser.parse_args()
 
-    if not args.manifest and not args.globs and not args.file:
-        parser.error("Provide --manifest (preferred), or glob patterns / --file.")
+    if not args.manifest and not args.globs:
+        parser.error("Provide --manifest (preferred), or glob patterns.")
 
     settings = MonitoringSettings()
     if not settings.has_db_uri:
@@ -157,7 +153,7 @@ def main():
         print(f"Reading benchmark samples from manifest: {args.manifest}")
         samples, manifest_labels = samples_from_manifest(args.manifest)
     else:
-        paths = collect_paths(args.globs, args.file)
+        paths = collect_paths(args.globs)
         print(f"Found {len(paths)} candidate image files.")
         samples = group_samples(paths)
 

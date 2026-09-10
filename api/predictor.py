@@ -74,7 +74,7 @@ def chans_reorder(image_channels: list[np.ndarray], image_metadata: dict) -> tup
 
     Returns a new (C, H, W) ndarray and a *shallow copy* of image_metadata
     with `channels` and `channel_files` reordered. The caller's dict is left
-    untouched so manifest-derived metadata (e.g. from compute_reference) is
+    untouched so manifest-derived metadata (e.g. from compute_predictions_references) is
     not mutated as a side effect of prediction.
     """
     parsed_channels = image_metadata['channels']

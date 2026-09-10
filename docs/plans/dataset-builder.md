@@ -1,5 +1,10 @@
 # Reusable dataset builder: sample selection, metadata artifacts, manifest-based benchmark registration
 
+> **Update:** `monitoring/compute_reference.py` and `monitoring/compute_benchmark.py`
+> (both referenced below) were later merged into
+> `monitoring/compute_predictions_references.py --target {val,benchmark,both}`. The plan
+> below is left as originally written for context.
+
 Extract the sample-selection logic that currently lives scattered across
 `src/datamodule.py` + `src/dataset.py` into a reusable, training-independent layer, so that a
 short "filters only" spec can produce a dataset **metadata + manifest artifact** on disk — the

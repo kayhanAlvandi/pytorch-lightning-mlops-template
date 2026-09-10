@@ -1,43 +1,25 @@
-# Ephemeral jobs sharing the api service's image/build (already has
-# mlflow/torch/timm/psycopg -- no dedicated Dockerfile needed): reference
-# (validation-set) predictions for drift detection, and benchmark predictions
-# for supervised quality monitoring. Only monitoring/ is bind-mounted so
-# editing the job scripts doesn't require rebuilding the (heavier,
-# long-running) api image.
+# Ephemeral job sharing the api service's image/build (already has
+# mlflow/torch/timm/psycopg -- no dedicated Dockerfile needed): computes
+# reference predictions -- this run's own validation set (for drift
+# detection) and/or the global benchmark set (for supervised quality
+# monitoring) -- via monitoring/compute_predictions_references.py. Only
+# monitoring/ is bind-mounted so editing the job script doesn't require
+# rebuilding the (heavier, long-running) api image.
 #
 # Benchmark samples themselves are registered separately by register-benchmark
 # (docker/jobs/monitoring, lightweight image -- no inference needed there).
 #
-# Both resolve the model to score via API_MODEL_NAME/API_RUN_NAME in
-# .env.api, and are resumable (skip samples already scored for that run_id).
+# Resolves the model to score via API_MODEL_NAME/API_RUN_NAME in .env.api, and
+# is resumable per target (skips samples already scored for that run_id).
+# Default target is "both"; override with
+# CMD="python -m monitoring.compute_predictions_references --target val|benchmark".
 services:
-  compute-reference:
+  compute-predictions-references:
     build:
       context: ../../..
       dockerfile: docker/services/api/Dockerfile
     image: image_classifier_api
-    container_name: compute_reference
-    env_file: .env.api
-    volumes:
-      - ${O_DRIVE_PATH}:/mnt/O:rw
-      - ../../../monitoring:/app/monitoring:ro
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-    networks:
-      - ml-platform
-      - pg_network
-
-  compute-benchmark:
-    build:
-      context: ../../..
-      dockerfile: docker/services/api/Dockerfile
-    image: image_classifier_api
-    container_name: compute_benchmark
+    container_name: compute_predictions_references
     env_file: .env.api
     volumes:
       - ${O_DRIVE_PATH}:/mnt/O:rw

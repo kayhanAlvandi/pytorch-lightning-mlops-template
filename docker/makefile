@@ -20,10 +20,14 @@ serve-dev: network
 train-run: network
 	docker compose -f jobs/train/docker-compose.yaml run --rm training $(CMD)
 
-# Usage: make compute-reference (reads model/db config from jobs/compute_references/.env.api)
-compute-reference: network
-	docker compose -f jobs/compute_references/docker-compose.yaml run --rm compute-reference \
-		$(if $(CMD),$(CMD),python -m monitoring.compute_reference)
+# Usage: make compute-predictions-references (reads model/db config from
+# jobs/compute_references/.env.api). Computes both this run's validation
+# reference (drift baseline) and the global benchmark reference (quality
+# baseline) in one model load. Override target with e.g.
+# CMD="python -m monitoring.compute_predictions_references --target val"
+compute-predictions-references: network
+	docker compose -f jobs/compute_references/docker-compose.yaml run --rm compute-predictions-references \
+		$(if $(CMD),$(CMD),python -m monitoring.compute_predictions_references)
 
 # Usage: make drift-report-run  (or CMD="python -m monitoring.run_drift_report --window-days 14")
 # Resolves the served model's run_id from the running api's /model endpoint.
@@ -44,6 +48,10 @@ label-backfill-run: network
 	docker compose -f jobs/monitoring/docker-compose.yaml run --rm label-backfill \
 		$(if $(CMD),$(CMD),python -m monitoring.backfill_labels)
 
+create-benchmark:
+	docker compose -f jobs/train/docker-compose.yaml run --rm build_benchmark \
+		python scripts/build_dataset.py dataset_spec=benchmark name=benchmark_v1
+
 # Usage: make register-benchmark-run  (defaults to the manifest below)
 #    or: make register-benchmark-run CMD="python -m monitoring.register_benchmark --manifest data/<name>/dataset_manifest.json"
 # One-time/additive: registers curated benchmark samples (never in any
@@ -53,13 +61,6 @@ BENCHMARK_MANIFEST ?= data/benchmark_v1/dataset_manifest.json
 register-benchmark-run: network
 	docker compose -f jobs/monitoring/docker-compose.yaml run --rm register-benchmark \
 		$(if $(CMD),$(CMD),python -m monitoring.register_benchmark --manifest $(BENCHMARK_MANIFEST))
-
-# Usage: make compute-benchmark (reads model/db config from jobs/compute_references/.env.api)
-# Scores the registered benchmark dataset with the served model -- the
-# supervised-quality baseline that quality-report-run compares against.
-compute-benchmark: network
-	docker compose -f jobs/compute_references/docker-compose.yaml run --rm compute-benchmark \
-		$(if $(CMD),$(CMD),python -m monitoring.compute_benchmark)
 
 # ── Teardown (each is independent — won't affect others) ─────────────────
 down-mlflow:

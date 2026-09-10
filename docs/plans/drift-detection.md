@@ -5,6 +5,12 @@ created: 2026-08-13T17:28:02Z
 ---
 # Drift detection (step 3): reference computation + Evidently drift reports
 
+> **Update:** `monitoring/compute_reference.py` was later merged with
+> `monitoring/compute_benchmark.py` (see `docs/plans/quality-tracking.md`) into
+> `monitoring/compute_predictions_references.py --target val`, with the Docker/Makefile
+> `compute-reference` target replaced by `compute-predictions-references`. The plan and
+> log below are left as originally written for context.
+
 Add a background reference-computation pipeline (per served model, run once against its
 validation set) and a drift-report job that compares live `image_prediction`/`tile_prediction`
 traffic against that reference using Evidently, grouped by `p_label`, with everything (report

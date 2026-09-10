@@ -70,19 +70,19 @@ processing disjoint shards of the samples. No locks, no shared state.
 
 ```
 # Multi-GPU (true N× speedup):
-python compute_reference.py --shard 0/2 --device cuda:0
-python compute_reference.py --shard 1/2 --device cuda:1
+python compute_predictions_references.py --shard 0/2 --device cuda:0
+python compute_predictions_references.py --shard 1/2 --device cuda:1
 
 # CPU-only multi-process (true N× on CPU):
-python compute_reference.py --shard 0/4 --device cpu
-python compute_reference.py --shard 1/4 --device cpu
-python compute_reference.py --shard 2/4 --device cpu
-python compute_reference.py --shard 3/4 --device cpu
+python compute_predictions_references.py --shard 0/4 --device cpu
+python compute_predictions_references.py --shard 1/4 --device cpu
+python compute_predictions_references.py --shard 2/4 --device cpu
+python compute_predictions_references.py --shard 3/4 --device cpu
 
 # Mixed GPU + CPU (GPU gets most samples, CPU offloads a few):
-python compute_reference.py --shard 0/3 --device cuda:0   # GPU, ~70% of samples
-python compute_reference.py --shard 1/3 --device cpu      # CPU, ~15% of samples
-python compute_reference.py --shard 2/3 --device cpu      # CPU, ~15% of samples
+python compute_predictions_references.py --shard 0/3 --device cuda:0   # GPU, ~70% of samples
+python compute_predictions_references.py --shard 1/3 --device cpu      # CPU, ~15% of samples
+python compute_predictions_references.py --shard 2/3 --device cpu      # CPU, ~15% of samples
 ```
 
 **Why multiple processes/pods are safe but threads are not:**
@@ -115,9 +115,20 @@ is sufficient. Mixed CPU+GPU is only worth it for very large jobs.
 
 **Status:** Decision made. `batch_predict` shelved. Multi-process
 `--shard`/`--device` approach documented for future implementation
-when `compute_reference.py` needs to scale beyond a single GPU.
+when `compute_predictions_references.py` needs to scale beyond a single GPU.
 Kubernetes horizontal scaling (step 7) uses the same pattern at
 larger scale with a job queue.
+
+## Benchmark dataset tracking (future)
+
+- [ ] Add persistent version and lineage tracking for benchmark datasets,
+      potentially using MLflow experiment tracking. Benchmark registration
+      currently reads the generated manifests and metadata from the mounted
+      `data/` directory, but those artifacts are not tracked in a dedicated
+      registry.
+
+**Status:** Not required for the current smoke test; revisit when benchmark
+versions need to be compared, audited, or reproduced across environments.
 
 ## Monitoring smoke test (manual, real data)
 
@@ -157,12 +168,15 @@ Run in order; each step depends on the previous one.
       (no duplicate rows, no errors).
 
 ### 3. Compute benchmark + reference predictions
-- [ ] **3a.** Run `compute-benchmark` for the run.
+- [ ] Run `make compute-predictions-references` for the run (computes both
+      targets in one model load; use `CMD=... --target val` or `--target
+      benchmark` to run just one).
+- [ ] **3a. Benchmark target.**
       - Produces `image_prediction` + `tile_prediction` rows with
         `benchmark_id IS NOT NULL`, `is_reference = FALSE`.
       - **Verify:** counts match `benchmark_dataset_member`.
       - **Verify:** resume doesn't duplicate rows.
-- [ ] **3b.** Run `compute-reference` for the run.
+- [ ] **3b. Validation target.**
       - Produces `image_prediction` + `tile_prediction` rows with
         `is_reference = TRUE`, `benchmark_id IS NULL`.
       - **Verify:** input pixel / channel stats are logged
@@ -207,6 +221,6 @@ Run in order; each step depends on the previous one.
       confirm relations/flags are consistent across the whole run.
 
 ### Optional
-- [ ] Repeat `compute-benchmark` + `quality-report` for a second
-      `run_id` to confirm benchmark quality is tracked per-model,
-      not globally.
+- [ ] Repeat `compute-predictions-references --target benchmark` +
+      `quality-report` for a second `run_id` to confirm benchmark quality is
+      tracked per-model, not globally.

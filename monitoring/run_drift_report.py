@@ -184,7 +184,8 @@ def main():
         cur_tile = pd.DataFrame(cur_tile_rows)
 
         if ref_img.empty or ref_tile.empty:
-            print("ERROR: no reference data for this run_id. Run compute-reference first.")
+            print("ERROR: no reference data for this run_id. "
+                  "Run 'make compute-predictions-references' first.")
             return
         if cur_img.empty and cur_tile.empty:
             print("No live predictions in the window -- nothing to compare. Exiting.")

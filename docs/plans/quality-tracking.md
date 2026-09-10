@@ -1,5 +1,12 @@
 # Supervised quality tracking: label backfill + benchmark + Evidently quality reports
 
+> **Update:** `monitoring/compute_reference.py` and `monitoring/compute_benchmark.py`
+> (described below as B2 and the drift-detection reference job) were later merged into a
+> single `monitoring/compute_predictions_references.py --target {val,benchmark,both}`,
+> with one Docker service (`compute-predictions-references`) replacing the separate
+> `compute-reference`/`compute-benchmark` jobs. The plan below is left as originally
+> written for context.
+
 Add three complementary pieces on top of the unsupervised drift detection in
 `docs/plans/drift-detection.md`:
 
