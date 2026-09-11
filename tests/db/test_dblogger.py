@@ -1,7 +1,9 @@
 """Tests for DBLogger.log_image_metadata.
 
-Requires a running PostgreSQL instance with the schema from
-database/init/01_prediction.sql applied.
+Requires a running PostgreSQL instance with the prediction schema applied.
+Schemas 01-03 are applied (prediction + reference + benchmark) because
+log_image_prediction/log_tile_prediction now insert is_reference and
+benchmark_id columns added by those later migrations.
 
 Set the DB_TEST_URI environment variable to point to your test database, e.g.:
     DB_TEST_URI=postgresql://postgres:postgres@localhost:5432/image_classifier_test
@@ -12,7 +14,11 @@ import psycopg
 import pytest
 
 from database.dblogger import DBLogger
-from utils.filename_parser import clean_image_metadata, clean_tiles_metadata
+from utils.filename_parser import (
+    clean_image_metadata,
+    clean_tiles_metadata,
+    extract_info_from_filename,
+)
 
 DB_USER = os.getenv("DB_USER", "admin")
 DB_PASS = os.getenv("DB_PASS", "admin123")
@@ -27,18 +33,21 @@ DB_TEST_URI = os.getenv(
 # URI to the default 'postgres' DB (used to create/drop the test DB)
 DB_ADMIN_URI = f"postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/postgres"
 
-SCHEMA_PATH = os.path.join(
-    os.path.dirname(__file__), "..", "..", "database", "init", "01_prediction.sql"
+SCHEMA_DIR = os.path.join(
+    os.path.dirname(__file__), "..", "..", "database", "init"
 )
+SCHEMA_FILES = ["01_prediction.sql", "02_reference.sql", "03_benchmark.sql"]
 
 
 def setup_module():
-    """Apply schema in a fresh public schema."""
+    """Apply schemas in a fresh public schema."""
     conn = psycopg.connect(DB_TEST_URI, autocommit=True)
     conn.execute("DROP SCHEMA public CASCADE")
     conn.execute("CREATE SCHEMA public")
-    with open(SCHEMA_PATH, encoding="utf-8") as f:
-        conn.execute(f.read())
+    for fname in SCHEMA_FILES:
+        path = os.path.join(SCHEMA_DIR, fname)
+        with open(path, encoding="utf-8") as f:
+            conn.execute(f.read())
     conn.close()
 
 
@@ -74,8 +83,26 @@ CHANNEL_FILENAMES = [
 
 
 def _make_upload_metadata(filenames: list[str], root_path: str = ROOT_PATH, shape: tuple = SHAPE) -> list[tuple]:
-    """Build DB-ready tuples via the utils parser, same as the API does."""
-    raw = [{"filename": fname, "shape": shape, "root_path": root_path} for fname in filenames]
+    """Build DB-ready tuples via the utils parser, same as the API does.
+
+    Parses each filename to extract plate/well/field/channel, then assembles
+    the single dict shape that clean_image_metadata expects (one dict with
+    channels/channel_files lists, not a list of per-file dicts).
+    """
+    infos = [extract_info_from_filename(fname) for fname in filenames]
+    # Sort by channel ascending (matches training/inference convention)
+    sorted_pairs = sorted(zip(filenames, infos), key=lambda p: p[1]["channel"])
+    sorted_filenames = [p[0] for p in sorted_pairs]
+    sorted_infos = [p[1] for p in sorted_pairs]
+    raw = {
+        "plate": sorted_infos[0]["plate"],
+        "well": sorted_infos[0]["well"],
+        "field": sorted_infos[0]["field"],
+        "channels": [info["channel"] for info in sorted_infos],
+        "channel_files": sorted_filenames,
+        "root_path": root_path,
+        "shape": shape,
+    }
     return clean_image_metadata(raw)
 
 
@@ -238,8 +265,10 @@ def _make_tiles(n_tiles=4, crop_size=CROP_SIZE):
 
 def _make_image_prediction_tuple(plate=PLATE, well=WELL, field=1, run_id=RUN_ID,
                                   p_label="positive", t_label=None,
-                                  total_tiles=4, vote_fraction=0.75, avg_confidence=0.9):
-    return (plate, well, field, run_id, p_label, t_label, total_tiles, vote_fraction, avg_confidence)
+                                  total_tiles=4, vote_fraction=0.75, avg_confidence=0.9,
+                                  is_reference=False, benchmark_id=None):
+    return (plate, well, field, run_id, p_label, t_label,
+            total_tiles, vote_fraction, avg_confidence, is_reference, benchmark_id)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -318,7 +347,7 @@ class TestLogTileStackMember:
     def test_channel_index_stored_correctly(self, db_logger):
         """channel_index is stored per member, matching the model's input channel-axis position."""
         img_ids = _insert_images(db_logger)
-        tiles = _make_tiles(1)
+        tiles = _make_tiles(2)
         tile_stack_metadata = clean_tiles_metadata(tiles, img_ids)
         tile_stack_ids = db_logger.log_tile_stack(tile_stack_metadata)
 
@@ -436,7 +465,7 @@ class TestLogTilePrediction:
         tile_stack_ids, img_pred_id = self._setup_prerequisites(db_logger)
 
         tile_preds = [
-            (img_pred_id, ts_id, RUN_ID, "positive", None, 0.85)
+            (img_pred_id, ts_id, RUN_ID, "positive", None, 0.85, False, None)
             for ts_id in tile_stack_ids
         ]
         db_logger.log_tile_prediction(tile_preds)
@@ -453,7 +482,7 @@ class TestLogTilePrediction:
         """p_label, confidence, run_id are stored correctly."""
         tile_stack_ids, img_pred_id = self._setup_prerequisites(db_logger)
 
-        tile_preds = [(img_pred_id, tile_stack_ids[0], RUN_ID, "negative", None, 0.6)]
+        tile_preds = [(img_pred_id, tile_stack_ids[0], RUN_ID, "negative", None, 0.6, False, None)]
         db_logger.log_tile_prediction(tile_preds)
 
         with db_logger.connection.cursor() as cur:
@@ -474,7 +503,7 @@ class TestLogTilePrediction:
     def test_created_at_auto_set(self, db_logger):
         """created_at is automatically set to a non-null timestamp."""
         tile_stack_ids, img_pred_id = self._setup_prerequisites(db_logger)
-        tile_preds = [(img_pred_id, tile_stack_ids[0], RUN_ID, "positive", None, 0.9)]
+        tile_preds = [(img_pred_id, tile_stack_ids[0], RUN_ID, "positive", None, 0.9, False, None)]
         db_logger.log_tile_prediction(tile_preds)
 
         with db_logger.connection.cursor() as cur:
