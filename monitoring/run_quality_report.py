@@ -64,6 +64,11 @@ def run_quality_report(
     mapping = ColumnMapping()
     mapping.target = "t_label"
     mapping.prediction = "p_label"
+    # Binary classification needs pos_label set to an actual label value;
+    # Evidently's default (int 1) crashes on string labels.
+    labels = sorted(set(benchmark_df["t_label"]).union(set(current_df["t_label"])))
+    if labels:
+        mapping.pos_label = labels[-1]
 
     report = Report(metrics=[ClassificationPreset()])
     report.run(reference_data=benchmark_df, current_data=current_df, column_mapping=mapping)
