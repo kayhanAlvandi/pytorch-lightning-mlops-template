@@ -185,12 +185,13 @@ def _manifest_entry(idx: int, sample: dict[str, Any]) -> dict[str, Any]:
         'plate': sample['plate'],
         'well': sample['well'],
         'field': sample['field'],
-        'label': sample['label'],
         "root_path": str(root_paths[0]),
         'channel_files': {
             channel: path.name for channel, path in sample['channel_files'].items()
         },
     }
+    if 'label' in sample:
+        entry['label'] = sample['label']
     if sample.get('image_size'):
         # (height, width) -- persisted so consumers (e.g. benchmark registration
         # writing image_metadata) don't have to reopen every image file.
@@ -251,9 +252,19 @@ def create_metadata_from_samples(
     from collections import Counter
 
     spec_dict = spec.to_dict() if hasattr(spec, 'to_dict') else dict(spec)
-    labels = [s['label'] for s in samples]
-    class_names = sorted(set(labels))
     wells_used = sorted({f"{s['plate']}/{s['well']}" for s in samples})
+
+    # Unlabelled dataset (e.g. real production data with no ground truth
+    # yet, built with use_mongodb=false and no dummy_labels): samples have no
+    # 'label' key at all, so there is no class vocabulary to report.
+    has_labels = bool(samples) and 'label' in samples[0]
+    if has_labels:
+        labels = [s['label'] for s in samples]
+        class_names = sorted(set(labels))
+        samples_per_class = dict(sorted(Counter(labels).items()))
+    else:
+        class_names = []
+        samples_per_class = {}
 
     return {
         'name': name or spec_dict.get('name', 'dataset'),
@@ -264,7 +275,7 @@ def create_metadata_from_samples(
         'num_classes': len(class_names),
         'class_names': class_names,
         'total_samples': len(samples),
-        'samples_per_class': dict(sorted(Counter(labels).items())),
+        'samples_per_class': samples_per_class,
         'wells_used': wells_used,
         'num_wells': len(wells_used),
         'spec': spec_dict,

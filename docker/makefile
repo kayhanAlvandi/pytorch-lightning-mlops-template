@@ -49,8 +49,12 @@ label-backfill-run: network
 		$(if $(CMD),$(CMD),python -m monitoring.backfill_labels)
 
 create-benchmark:
-	docker compose -f jobs/train/docker-compose.yaml run --rm build_benchmark \
+	docker compose -f jobs/train/docker-compose.yaml run --rm build_dataset \
 		python scripts/build_dataset.py dataset_spec=benchmark name=benchmark_v1
+
+create-custom-dataset:
+	docker compose -f jobs/train/docker-compose.yaml run --rm build_dataset \
+		python scripts/build_dataset.py dataset_spec=custom-dataset name=custom_v1
 
 # Usage: make register-benchmark-run  (defaults to the manifest below)
 #    or: make register-benchmark-run CMD="python -m monitoring.register_benchmark --manifest data/<name>/dataset_manifest.json"

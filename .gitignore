@@ -93,6 +93,7 @@ runs/
 events.out.tfevents.*
 
 # Data (don't commit large data files)
+monitoring/reports/*
 data/**
 !configs/
 *.jxl
@@ -115,9 +116,9 @@ dataset_manifest.json
 # on purpose -- a benchmark set every future model is compared against has to be
 # frozen and reviewable; see docs/plans/dataset-builder.md).
 # Must come after the data/** and dataset_*.json rules above: last match wins.
-!data/**/
-!data/**/dataset_metadata.json
-!data/**/dataset_manifest.json
+!data/benchmark*/
+!data/benchmark*/dataset_metadata.json
+!data/benchmark*/dataset_manifest.json
 
 ## ignore agents rules
 AGENTS.md

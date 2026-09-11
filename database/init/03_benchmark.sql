@@ -47,18 +47,28 @@ ALTER TABLE tile_prediction  ADD COLUMN IF NOT EXISTS benchmark_id INTEGER DEFAU
 CREATE INDEX IF NOT EXISTS idx_image_prediction_run_benchmark ON image_prediction(run_id, benchmark_id);
 CREATE INDEX IF NOT EXISTS idx_tile_prediction_run_benchmark  ON tile_prediction(run_id, benchmark_id);
 
--- 02_reference.sql's live_*/reference_* views were defined as `SELECT *` before
--- benchmark_id existed -- Postgres expands `*` at CREATE VIEW time, so ALTER
--- TABLE alone does not add the new column to them. Recreate to pick it up
--- (CREATE OR REPLACE VIEW allows appending columns at the end).
+-- Canonical "production only" views (defined here, not in 02_reference.sql,
+-- since benchmark_id only exists from this point on -- see the note there).
+-- "live" (production) excludes both is_reference = TRUE and benchmark_id IS
+-- NOT NULL: a benchmark score has is_reference = FALSE too (it's not a
+-- validation-set row), so without the second condition it would silently
+-- leak into production/drift numbers. is_reference and benchmark_id are
+-- otherwise independent flags -- reference rows are never benchmark rows and
+-- vice versa -- so this is the only pair of views that needs both conditions.
 CREATE OR REPLACE VIEW live_image_prediction AS
-    SELECT * FROM image_prediction WHERE is_reference = FALSE;
+    SELECT * FROM image_prediction WHERE is_reference = FALSE AND benchmark_id IS NULL;
 
 CREATE OR REPLACE VIEW live_tile_prediction AS
-    SELECT * FROM tile_prediction WHERE is_reference = FALSE;
+    SELECT * FROM tile_prediction WHERE is_reference = FALSE AND benchmark_id IS NULL;
 
-CREATE OR REPLACE VIEW reference_image_prediction AS
-    SELECT * FROM image_prediction WHERE is_reference = TRUE;
+-- reference_image_prediction/reference_tile_prediction are NOT redefined
+-- here: they only filter on is_reference, which already exists in
+-- 02_reference.sql, so that's the one place they're defined.
 
-CREATE OR REPLACE VIEW reference_tile_prediction AS
-    SELECT * FROM tile_prediction WHERE is_reference = TRUE;
+-- Symmetric convenience views onto the benchmark-only rows (a model's scored
+-- predictions on the fixed, model-independent benchmark set).
+CREATE OR REPLACE VIEW benchmark_image_prediction AS
+    SELECT * FROM image_prediction WHERE benchmark_id IS NOT NULL;
+
+CREATE OR REPLACE VIEW benchmark_tile_prediction AS
+    SELECT * FROM tile_prediction WHERE benchmark_id IS NOT NULL;

@@ -47,6 +47,9 @@ def spec_from_cfg(cfg: DictConfig, name: str) -> DatasetSpec:
         root_dir=raw["root_dir"],
         channels=list(raw["channels"]),
         use_mongodb=raw.get("use_mongodb", True),
+        # Opt-in only: with use_mongodb=false, default is a genuinely
+        # unlabelled dataset, not fake pseudo-random labels.
+        dummy_labels=raw.get("dummy_labels", False),
         exclude_wells=_wells("exclude_wells"),
         include_wells=_wells("include_wells"),
         max_wells_per_label=raw.get("max_wells_per_label"),

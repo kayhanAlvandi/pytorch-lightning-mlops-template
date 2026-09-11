@@ -20,3 +20,7 @@ SELECT table_name
 FROM information_schema.tables 
 WHERE table_schema = 'public'
 ORDER BY table_name;
+
+Select * FROM tile_channel_stats;
+
+Select * FROM reference_image_prediction;

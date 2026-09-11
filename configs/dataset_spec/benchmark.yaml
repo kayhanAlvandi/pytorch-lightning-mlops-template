@@ -15,26 +15,20 @@
 #   make register-benchmark-run CMD="python -m monitoring.register_benchmark \
 #       --manifest data/benchmark_v1/dataset_manifest.json"
 
-root_dir: "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp03-CP-40X-bin1X1_20230831_143904/MIG-Exp03-CP-40X-bin1X1"
+root_dir: "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1"
 channels: [1, 2, 3, 4, 5]
 
 # MongoDB treatments (the same source training uses)
 use_mongodb: true
 
 # Wells reserved for the benchmark -- never trained on.
-# NOTE: K07-K11 are the corrupted wells excluded from training
-# (configs/datamodule/tiled.yaml), so they must NOT be used here either.
-include_wells:
-  - ["MIG-Exp03-CP-40X-bin1X1", "N07"]
-  - ["MIG-Exp03-CP-40X-bin1X1", "N08"]
-  - ["MIG-Exp03-CP-40X-bin1X1", "N09"]
-  - ["MIG-Exp03-CP-40X-bin1X1", "N10"]
+include_wells: null
 
 exclude_wells: null
 max_wells_per_label: null
 
 # Cap fields per treatment so the benchmark stays a fixed, manageable size.
-max_samples_per_label: 8
+max_samples_per_label: 16
 
 # Makes the max_samples_per_label selection reproducible.
 seed: 42

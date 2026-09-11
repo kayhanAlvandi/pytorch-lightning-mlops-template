@@ -26,11 +26,16 @@ CREATE INDEX IF NOT EXISTS idx_tile_prediction_run_ref_created ON tile_predictio
 -- (dashboards, step 5's retrain trigger) should query these, not the raw
 -- tables, so a missing `is_reference` filter can't silently mix validation
 -- data into production numbers.
-CREATE OR REPLACE VIEW live_image_prediction AS
-    SELECT * FROM image_prediction WHERE is_reference = FALSE;
-
-CREATE OR REPLACE VIEW live_tile_prediction AS
-    SELECT * FROM tile_prediction WHERE is_reference = FALSE;
+--
+-- live_image_prediction/live_tile_prediction are defined once, in
+-- 03_benchmark.sql, not here: they also need to exclude benchmark_id IS NOT
+-- NULL, and that column doesn't exist yet at this point in a fresh init.
+-- Postgres freezes `SELECT *` into an explicit column list at CREATE VIEW
+-- time, so a view created here wouldn't pick up benchmark_id later anyway --
+-- defining it early would just be a dead definition immediately superseded
+-- by 03's CREATE OR REPLACE VIEW. reference_image_prediction/
+-- reference_tile_prediction below don't have this problem (they only filter
+-- on is_reference, already added above), so they stay defined once, here.
 
 -- Symmetric convenience views onto the reference-only rows.
 CREATE OR REPLACE VIEW reference_image_prediction AS

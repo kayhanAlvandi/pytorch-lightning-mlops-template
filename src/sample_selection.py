@@ -105,25 +105,36 @@ def read_image_shape(file_path: str | Path) -> tuple[int, int]:
 
 def build_samples(
     index: FileIndex,
-    labels_dict: dict[Well, str],
+    labels_dict: dict[Well, str] | None,
     channels: list[int],
+    wells: set[Well] | None = None,
     max_samples_per_label: int | None = None,
     seed: int = 42,
     shape_mode: str | None = None,
     verbose: bool = False,
 ) -> list[dict]:
-    """Turn a file index into labelled samples, one per (plate, well, field).
+    """Turn a file index into samples, one per (plate, well, field).
 
-    Keeps only samples whose well has a label and which have **every** requested
-    channel present, then optionally balances to ``max_samples_per_label``.
+    Keeps only samples with **every** requested channel present, then
+    optionally balances to ``max_samples_per_label``.
 
     Args:
         index: output of ``scan_directory``.
         labels_dict: ``{(plate, well): label}``; samples of unlabelled wells are
-            dropped. Restricting this mapping is how the caller restricts the
-            dataset (e.g. one call per train/val split).
+            dropped and a ``label`` key is attached to each kept sample.
+            Restricting this mapping is how the caller restricts the dataset
+            (e.g. one call per train/val split). Pass ``None`` to build an
+            **unlabelled** dataset (e.g. real production data with no ground
+            truth yet): every well is kept (subject to ``wells`` below) and
+            samples get no ``label`` key at all, matching the API's own
+            optional ``label`` metadata field.
         channels: required channel numbers; samples missing any are dropped.
+        wells: restrict to these ``(plate, well)`` pairs. Only needed when
+            ``labels_dict`` is ``None`` -- otherwise ``labels_dict``'s own keys
+            already express the well restriction.
         max_samples_per_label: balance to at most N samples per label class.
+            With ``labels_dict=None`` there is only one implicit "class", so
+            this caps the total sample count instead.
         seed: seeds the balancing RNG so the selection is reproducible.
         shape_mode: ``None`` (don't read shapes), ``"first"`` (read one image and
             apply its size to every sample -- fast, assumes a uniform
@@ -132,27 +143,32 @@ def build_samples(
         verbose: print the selected samples.
 
     Returns:
-        Sample dicts with keys ``plate``, ``well``, ``field``, ``label``,
-        ``channel_files`` (``{channel: Path}``) and, when ``shape_mode`` is set,
+        Sample dicts with keys ``plate``, ``well``, ``field``,
+        ``channel_files`` (``{channel: Path}``), ``label`` (only when
+        ``labels_dict`` is not ``None``) and, when ``shape_mode`` is set,
         ``image_size`` (``(height, width)``).
     """
     channels = sorted(channels)
 
     samples = []
     for (plate, well, field) in sorted(index):
-        if (plate, well) not in labels_dict:
+        if wells is not None and (plate, well) not in wells:
+            continue
+        if labels_dict is not None and (plate, well) not in labels_dict:
             continue
         channel_files = index[(plate, well, field)]
         if not all(ch in channel_files for ch in channels):
             continue
-        samples.append({
+        sample = {
             "plate": plate,
             "well": well,
             "field": field,
-            "label": labels_dict[(plate, well)],
             "channel_files": {ch: channel_files[ch] for ch in channels},
             "image_size": None,
-        })
+        }
+        if labels_dict is not None:
+            sample["label"] = labels_dict[(plate, well)]
+        samples.append(sample)
 
     if max_samples_per_label is not None:
         samples = _balance_samples(samples, max_samples_per_label, seed=seed, verbose=verbose)
@@ -163,18 +179,26 @@ def build_samples(
     return samples
 
 
+_UNLABELLED = "(no label)"
+
+
 def _balance_samples(
     samples: list[dict],
     max_samples_per_label: int,
     seed: int = 42,
     verbose: bool = False,
 ) -> list[dict]:
-    """Randomly keep at most N samples per label, reproducibly for a given seed."""
+    """Randomly keep at most N samples per label, reproducibly for a given seed.
+
+    Unlabelled samples (no ``label`` key, e.g. from ``build_samples(labels_dict=
+    None)``) all fall into one implicit group, so this caps the total sample
+    count instead of balancing across classes.
+    """
     rng = random.Random(seed)
 
     samples_by_label: dict[str, list[dict]] = defaultdict(list)
     for sample in samples:
-        samples_by_label[sample["label"]].append(sample)
+        samples_by_label[sample.get("label", _UNLABELLED)].append(sample)
 
     balanced = []
     for label in sorted(samples_by_label):
@@ -184,13 +208,19 @@ def _balance_samples(
         balanced.extend(selected)
         print(f"  {label}: {len(label_samples)} -> {len(selected)} samples")
 
-    print(f"Balanced to {max_samples_per_label} samples/label: "
-          f"{len(samples)} -> {len(balanced)}")
+    if list(samples_by_label) == [_UNLABELLED]:
+        print(f"Capped to {max_samples_per_label} samples (no label source): "
+              f"{len(samples)} -> {len(balanced)}")
+    else:
+        print(f"Balanced to {max_samples_per_label} samples/label: "
+              f"{len(samples)} -> {len(balanced)}")
 
     if verbose:
         print("Selected samples:")
         for sample in balanced:
-            print(f"  {sample['plate']}/{sample['well']}/F{sample['field']} -> {sample['label']}")
+            label = sample.get("label", "")
+            suffix = f" -> {label}" if label else ""
+            print(f"  {sample['plate']}/{sample['well']}/F{sample['field']}{suffix}")
 
     return balanced
 
@@ -230,10 +260,18 @@ class DatasetSpec:
     verbose: bool = False
     name: str = "dataset"
     dummy_class_names: list[str] | None = dataclass_field(default=None)
+    # Opt-in only: assigns deterministic pseudo-random labels instead of real
+    # ones, for tests/offline runs. Default False means "use_mongodb: false"
+    # builds a genuinely unlabelled dataset (no 'label' key), not a fake one --
+    # real production data with no ground truth yet should never get a made-up
+    # label, the same way the API's /predict never invents one.
+    dummy_labels: bool = False
 
     @property
     def label_source(self) -> str:
-        return "mongodb" if self.use_mongodb else "dummy"
+        if self.use_mongodb:
+            return "mongodb"
+        return "dummy" if self.dummy_labels else "none"
 
     def to_dict(self) -> dict:
         """Plain-dict form, used for the config hash in the dataset version."""
@@ -255,10 +293,16 @@ class DatasetSpec:
 
         dataset_cfg = cfg["dataset"]
         exclude = cfg.get("exclude_wells")
+        use_mongodb = cfg.get("use_mongodb", True)
         return cls(
             root_dir=dataset_cfg["root_dir"],
             channels=list(dataset_cfg["channels"]),
-            use_mongodb=cfg.get("use_mongodb", True),
+            use_mongodb=use_mongodb,
+            # Training's datamodule always needs labels to train on, so it
+            # falls back to DummyLabelsProvider (not "no label") when
+            # use_mongodb is false -- match that here to reconstruct what
+            # training actually saw.
+            dummy_labels=not use_mongodb,
             exclude_wells=[tuple(w) for w in exclude] if exclude else None,
             max_wells_per_label=cfg.get("max_wells_per_label"),
             max_samples_per_label=dataset_cfg.get("max_samples_per_label"),
@@ -282,23 +326,35 @@ def build_dataset(spec: DatasetSpec, shape_mode: str | None = "per_sample") -> l
     wells = wells_from_index(index, spec.exclude_wells, spec.include_wells)
     print(f"{len(wells)} wells after filtering.")
 
-    labels = resolve_labels_for_wells(
-        wells,
-        source=spec.label_source,
-        class_names=spec.dummy_class_names,
-        seed=spec.seed,
-    )
-    print(f"{len(labels)} / {len(wells)} wells resolved to a label "
-          f"(source={spec.label_source}).")
-    if not labels:
-        return []
-
-    labels = limit_wells_per_label(labels, spec.max_wells_per_label, verbose=spec.verbose)
+    if spec.label_source == "none":
+        # Real data with no ground truth yet (e.g. live-traffic simulation
+        # input): don't invent a label, just keep every well that passed the
+        # include/exclude filters above.
+        if spec.max_wells_per_label is not None:
+            print("WARNING: max_wells_per_label is set but there is no label "
+                  "source ('use_mongodb: false' without 'dummy_labels: true') "
+                  "-- ignored, there are no label classes to limit per.")
+        labels = None
+        print(f"No label source configured -- samples will have no 'label' field "
+              f"({len(wells)} wells).")
+    else:
+        labels = resolve_labels_for_wells(
+            wells,
+            source=spec.label_source,
+            class_names=spec.dummy_class_names,
+            seed=spec.seed,
+        )
+        print(f"{len(labels)} / {len(wells)} wells resolved to a label "
+              f"(source={spec.label_source}).")
+        if not labels:
+            return []
+        labels = limit_wells_per_label(labels, spec.max_wells_per_label, verbose=spec.verbose)
 
     samples = build_samples(
         index,
         labels,
         spec.channels,
+        wells=wells if labels is None else None,
         max_samples_per_label=spec.max_samples_per_label,
         seed=spec.seed,
         shape_mode=shape_mode,

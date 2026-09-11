@@ -12,7 +12,7 @@ output_root: data
 # "per_sample" reads each sample's image header so the shape is persisted in the
 # manifest (benchmark registration then needs no image access at all).
 # "first" reads one image and reuses its size; null skips shape reading.
-shape_mode: per_sample
+shape_mode: first
 
 hydra:
   run:
