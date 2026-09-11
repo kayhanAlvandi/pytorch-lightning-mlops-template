@@ -1,0 +1,35 @@
+# Benchmark dataset spec -- the fixed, model-independent quality baseline.
+#
+# Only *selection* filters live here (which samples belong to the dataset).
+# Nothing about how they're consumed (batch size, transforms, tiling, splits),
+# which is what makes a spec reusable outside training.
+#
+# include_wells is a whitelist and is the source of truth for the benchmark's
+# defining property: these wells must never appear in any model's training set.
+# max_wells_per_label cannot express that (it just takes the first N sorted
+# wells per label), so it is deliberately left null here.
+#
+# Build with:
+#   python scripts/build_dataset.py dataset_spec=benchmark name=benchmark_v1
+# then register the frozen manifest:
+#   make register-benchmark-run CMD="python -m monitoring.register_benchmark \
+#       --manifest data/benchmark_v1/dataset_manifest.json"
+
+root_dir: "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1"
+channels: [1, 2, 3, 4, 5]
+
+# MongoDB treatments (the same source training uses)
+use_mongodb: true
+
+# Wells reserved for the benchmark -- never trained on.
+include_wells: null
+
+exclude_wells: null
+max_wells_per_label: null
+
+# Cap fields per treatment so the benchmark stays a fixed, manageable size.
+max_samples_per_label: 16
+
+# Makes the max_samples_per_label selection reproducible.
+seed: 42
+verbose: true

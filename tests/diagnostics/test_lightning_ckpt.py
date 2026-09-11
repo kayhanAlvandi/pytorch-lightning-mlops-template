@@ -1,9 +1,10 @@
 """Test Lightning checkpoint saving with OmegaConf types."""
-import torch
-import pytorch_lightning as pl
-from omegaconf import OmegaConf
-from hydra.utils import instantiate
 from pathlib import Path
+
+import pytorch_lightning as pl
+import torch
+from hydra.utils import instantiate
+from omegaconf import OmegaConf
 from pytorch_lightning.callbacks import ModelCheckpoint
 from torch.utils.data import DataLoader, TensorDataset
 

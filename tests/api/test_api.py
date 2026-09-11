@@ -77,6 +77,8 @@ class FakePredictor:
         }
 
     def predict(self, image, image_metadata):
+        from api.predictor import chans_reorder
+        image, image_metadata = chans_reorder(image, image_metadata)
         self.last_image = image
         self.last_image_metadata = image_metadata
         if self.db_logger:
@@ -93,10 +95,12 @@ class FakePredictor:
             ]
             self.db_logger.log_tile_stack_member(members)
             img_pred_id = self.db_logger.log_image_prediction(
-                ("plate", "well", 1, self.model_info["run_id"], "ClassA", None, 1, 1.0, 0.95)
+                ("plate", "well", 1, self.model_info["run_id"], "ClassA", None, 1, 1.0, 0.95,
+                 False, None)
             )
             self.db_logger.log_tile_prediction(
-                [(img_pred_id, tile_stack_ids[0], self.model_info["run_id"], "ClassA", None, 0.95)]
+                [(img_pred_id, tile_stack_ids[0], self.model_info["run_id"], "ClassA", None, 0.95,
+                  False, None)]
             )
         return {
             "predicted_class": "ClassA",
@@ -177,7 +181,8 @@ def test_predict_503_without_model(client):
 
 def test_predict_success_with_mock(client):
     api_main.predictor = FakePredictor()
-    r = client.post("/predict", files=_npy_upload(), data={"root_path": "/tmp"})
+    files = _multi_channel_tif_files(n_channels=3)
+    r = client.post("/predict", files=files, data={"root_path": "/tmp"})
     assert r.status_code == 200
     body = r.json()
     assert body["predicted_class"] == "ClassA"
@@ -195,7 +200,8 @@ def test_predict_calls_db_logger(client):
     """When a FakeDBLogger is attached, all five log_* methods are called once per request."""
     fake_db = FakeDBLogger()
     api_main.predictor = FakePredictor(db_logger=fake_db)
-    r = client.post("/predict", files=_npy_upload(), data={"root_path": "/tmp"})
+    files = _multi_channel_tif_files(n_channels=3)
+    r = client.post("/predict", files=files, data={"root_path": "/tmp"})
     assert r.status_code == 200
     assert len(fake_db.image_metadata_calls) == 1, "log_image_metadata should be called once"
     assert len(fake_db.tile_stack_calls) == 1, "log_tile_stack should be called once"
@@ -280,7 +286,7 @@ def test_predict_canonicalizes_shuffled_channel_order(client):
     assert r.status_code == 200
 
     # Metadata order is canonicalized to ascending channel number...
-    filenames = [info["filename"] for info in predictor.last_image_metadata]
+    filenames = predictor.last_image_metadata["channel_files"]
     assert filenames == [
         "PLATE1_A01_T0001F001L01A01Z01C01.tif",
         "PLATE1_A01_T0001F001L01A01Z01C02.tif",
@@ -299,7 +305,7 @@ def test_predict_rejects_duplicate_channel_numbers(client):
     api_main.predictor = FakePredictor()
     files = [
         _tif_file_with_value("PLATE1_A01_T0001F001L01A01Z01C01.tif", value=10),
-        _tif_file_with_value("PLATE1_A01_T0001F002L01A01Z01C01.tif", value=20),
+        _tif_file_with_value("PLATE1_A01_T0002F001L01A01Z01C01.tif", value=20),
     ]
     r = client.post("/predict", files=files, data={"root_path": "/tmp"})
     assert r.status_code == 400

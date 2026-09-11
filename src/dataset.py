@@ -1,5 +1,12 @@
-"""Custom Dataset for multi-channel microscopy images (JXL/TIF)."""
-import re
+"""Custom Dataset for multi-channel microscopy images (JXL/TIF).
+
+Sample *selection* (which plate/well/field/channel files make up the dataset)
+lives in ``src/sample_selection.py`` -- torch-free and shared with the standalone
+dataset builder. The classes here are the access layer: loading, normalising,
+tiling and transforming the samples they are given. Either pass a prebuilt
+``samples`` list (the datamodule does, so the directory is scanned once for both
+splits) or let them build their own from ``root_dir`` + ``labels_dict``.
+"""
 from collections.abc import Callable
 from pathlib import Path
 
@@ -8,6 +15,16 @@ import numpy as np
 import torch
 from PIL import Image
 from torch.utils.data import Dataset
+
+from utils.filename_parser import FILENAME_PATTERN
+from utils.labels import DEFAULT_DUMMY_CLASSES, resolve_labels_for_wells
+
+from .sample_selection import (
+    SUPPORTED_EXTENSIONS,
+    build_samples,
+    scan_directory,
+    wells_from_index,
+)
 
 try:
     import pillow_jxl  # JXL support for PIL  # noqa: F401
@@ -69,7 +86,7 @@ class LabelEncoder:
 
 
 class MultiChannelImageDataset(Dataset):
-    """Dataset for loading multi-channel microscopy images.
+    """Dataset for loading multi-channel microscopy images (no tiling).
     
     Each sample consists of multiple channels (C01-C05) from the same field (F).
     Labels are retrieved based on plate and well information.
@@ -77,13 +94,10 @@ class MultiChannelImageDataset(Dataset):
     Filename pattern: {plate}_{well}_T{time}F{field}L{layer}A{action}Z{z}C{channel}.jxl
     """
     
-    # Pattern to parse filename components (supports .jxl and .tif)
-    FILENAME_PATTERN = re.compile(
-        r"(?P<plate>.+?)_(?P<well>[A-Z]\d+)_T(?P<time>\d+)F(?P<field>\d+)L(?P<layer>\d+)A(?P<action>\d+)Z(?P<z>\d+)C(?P<channel>\d+)\.(?:jxl|tif)$",
-        re.IGNORECASE
-    )
-    
-    SUPPORTED_EXTENSIONS = (".jxl", ".tif")
+    # Kept as class attributes for backwards compatibility; the canonical
+    # definitions live in utils/filename_parser and src/sample_selection.
+    FILENAME_PATTERN = FILENAME_PATTERN
+    SUPPORTED_EXTENSIONS = SUPPORTED_EXTENSIONS
     
     def __init__(
         self,
@@ -92,6 +106,10 @@ class MultiChannelImageDataset(Dataset):
         labels_dict: dict[tuple[str, str], str],
         label_encoder: LabelEncoder,
         transform: Callable | None = None,
+        max_samples_per_label: int | None = None,
+        seed: int = 42,
+        verbose: bool = False,
+        samples: list[dict] | None = None,
     ):
         """
         Args:
@@ -100,62 +118,30 @@ class MultiChannelImageDataset(Dataset):
             labels_dict: Dictionary mapping (plate, well) to string label.
             label_encoder: Fitted LabelEncoder to convert string labels to int.
             transform: Optional transform to apply to samples.
+            max_samples_per_label: Max samples per label for balanced dataset.
+            seed: Seeds the balancing selection so it is reproducible.
+            verbose: Print detailed sample selection info.
+            samples: Prebuilt sample list (from src.sample_selection.build_samples).
+                When given, the directory is not scanned again.
         """
         self.root_dir = Path(root_dir)
         self.channels = sorted(channels)
         self.labels_dict = labels_dict
         self.label_encoder = label_encoder
         self.transform = transform
+        self.max_samples_per_label = max_samples_per_label
+        self.seed = seed
+        self.verbose = verbose
         
         # Build list of unique samples (plate, well, field combinations)
-        self.samples = self._build_sample_list()
-        
-    def _build_sample_list(self) -> list[dict]:
-        """Build list of unique samples based on available files."""
-        samples = {}
-        
-        # Iterate over all supported extensions
-        for ext in self.SUPPORTED_EXTENSIONS:
-            for file_path in self.root_dir.glob(f"*{ext}"):
-                match = self.FILENAME_PATTERN.match(file_path.name)
-                if not match:
-                    continue
-                    
-                info = match.groupdict()
-                plate = info["plate"]
-                well = info["well"]
-                field = info["field"]
-                channel = int(info["channel"])
-                
-                # Check if this channel is one we want
-                if channel not in self.channels:
-                    continue
-                
-                # Create unique sample key (plate, well, field)
-                sample_key = (plate, well, field)
-                
-                if sample_key not in samples:
-                    # Check if we have a label for this plate/well
-                    if (plate, well) not in self.labels_dict:
-                        continue
-                        
-                    samples[sample_key] = {
-                        "plate": plate,
-                        "well": well,
-                        "field": field,
-                        "label": self.labels_dict[(plate, well)],
-                        "channel_files": {},
-                    }
-                
-                samples[sample_key]["channel_files"][channel] = file_path
-        
-        # Filter to only samples that have all required channels
-        valid_samples = []
-        for sample_key, sample in samples.items():
-            if all(ch in sample["channel_files"] for ch in self.channels):
-                valid_samples.append(sample)
-        
-        return valid_samples
+        self.samples = samples if samples is not None else build_samples(
+            scan_directory(self.root_dir),
+            self.labels_dict,
+            self.channels,
+            max_samples_per_label=self.max_samples_per_label,
+            seed=self.seed,
+            verbose=self.verbose,
+        )
     
     def __len__(self) -> int:
         return len(self.samples)
@@ -262,7 +248,9 @@ class TiledMultiChannelDataset(Dataset):
         transform: Callable | None = None,
         cache_size: int = 16,
         max_samples_per_label: int | None = None,
+        seed: int = 42,
         verbose: bool = False,
+        samples: list[dict] | None = None,
     ):
         """
         Args:
@@ -275,7 +263,11 @@ class TiledMultiChannelDataset(Dataset):
             transform: Optional transform to apply (e.g., normalization, augmentation).
             cache_size: Number of images to keep in LRU cache.
             max_samples_per_label: Max samples per label for balanced dataset.
+            seed: Seeds the balancing selection so it is reproducible.
             verbose: Print detailed sample selection info.
+            samples: Prebuilt sample list (from src.sample_selection.build_samples,
+                built with shape_mode set). When given, the directory is not
+                scanned again.
         """
         self.root_dir = Path(root_dir)
         self.channels = sorted(channels)
@@ -286,110 +278,23 @@ class TiledMultiChannelDataset(Dataset):
         self.transform = transform
         self.cache = LRUImageCache(max_size=cache_size)
         self.max_samples_per_label = max_samples_per_label
+        self.seed = seed
         self.verbose = verbose
         
-        # Build sample list (one per image/field)
-        self.samples = self._build_sample_list()
-        
-        # Balance samples per label if requested
-        if self.max_samples_per_label is not None:
-            self.samples = self._balance_samples(self.samples)
+        # Build sample list (one per image/field), balanced if requested.
+        # image_size is needed up front to lay out the tile grid.
+        self.samples = samples if samples is not None else build_samples(
+            scan_directory(self.root_dir),
+            self.labels_dict,
+            self.channels,
+            max_samples_per_label=self.max_samples_per_label,
+            seed=self.seed,
+            shape_mode="first",
+            verbose=self.verbose,
+        )
         
         # Build tile index: list of (sample_idx, row, col) for all tiles
         self.tiles = self._build_tile_index()
-    
-    def _build_sample_list(self) -> list[dict]:
-        """Build list of unique samples based on available files."""
-        samples = {}
-        
-        for ext in self.SUPPORTED_EXTENSIONS:
-            for file_path in self.root_dir.glob(f"*{ext}"):
-                match = self.FILENAME_PATTERN.match(file_path.name)
-                if not match:
-                    continue
-                
-                info = match.groupdict()
-                plate = info["plate"]
-                well = info["well"]
-                field = info["field"]
-                channel = int(info["channel"])
-                
-                if channel not in self.channels:
-                    continue
-                
-                sample_key = (plate, well, field)
-                
-                if sample_key not in samples:
-                    if (plate, well) not in self.labels_dict:
-                        continue
-                    
-                    samples[sample_key] = {
-                        "plate": plate,
-                        "well": well,
-                        "field": field,
-                        "label": self.labels_dict[(plate, well)],
-                        "channel_files": {},
-                        "image_size": None,
-                    }
-                
-                samples[sample_key]["channel_files"][channel] = file_path
-        
-        # Filter to samples with all channels
-        valid_samples = []
-        for sample_key, sample in samples.items():
-            if all(ch in sample["channel_files"] for ch in self.channels):
-                valid_samples.append(sample)
-        
-        if not valid_samples:
-            return valid_samples
-        
-        # Get image size from first sample only (all images are same size)
-        first_sample = valid_samples[0]
-        first_channel = self.channels[0]
-        file_path = first_sample["channel_files"][first_channel]
-        img = self._load_single_image(file_path)
-        image_size = (img.shape[0], img.shape[1])
-        
-        # Apply same size to all samples
-        for sample in valid_samples:
-            sample["image_size"] = image_size
-        
-        return valid_samples
-    
-    def _balance_samples(self, samples: list[dict]) -> list[dict]:
-        """Balance samples by taking max N per label with random selection.
-        
-        Args:
-            samples: List of sample dicts with 'label' key
-            
-        Returns:
-            Balanced list with max_samples_per_label samples per class
-        """
-        import random
-        from collections import defaultdict
-        
-        # Group samples by label
-        samples_by_label = defaultdict(list)
-        for sample in samples:
-            samples_by_label[sample["label"]].append(sample)
-        
-        # Random sample from each label
-        balanced = []
-        for label, label_samples in samples_by_label.items():
-            random.shuffle(label_samples)
-            selected = label_samples[:self.max_samples_per_label]
-            balanced.extend(selected)
-            print(f"  {label}: {len(label_samples)} -> {len(selected)} samples")
-        
-        print(f"Balanced to {self.max_samples_per_label} samples/label: {len(samples)} -> {len(balanced)}")
-        
-        # Print selected samples details if verbose
-        if self.verbose:
-            print("Selected samples:")
-            for sample in balanced:
-                print(f"  {sample['plate']}/{sample['well']}/F{sample['field']} -> {sample['label']}")
-        
-        return balanced
     
     def _build_tile_index(self) -> list[tuple[int, int, int]]:
         """Build index of all tiles: (sample_idx, top, left)."""
@@ -503,104 +408,78 @@ class DummyLabelsProvider:
     
     Generates random string labels based on plate/well combinations.
     Replace with MongoDB-based provider in production.
+    
+    Label resolution itself lives in ``utils/labels.py`` (shared with the
+    monitoring jobs); this class is the well-discovery + lookup convenience
+    wrapper that takes a directory.
     """
     
     # Default class names for dummy labels
-    DEFAULT_CLASSES: tuple[str, ...] = ("ClassA", "ClassB", "ClassC", "ClassD")
+    DEFAULT_CLASSES: tuple[str, ...] = DEFAULT_DUMMY_CLASSES
     
     def __init__(self, class_names: list[str] | None = None, seed: int = 42):
         self.class_names = class_names or self.DEFAULT_CLASSES
         self.seed = seed
+    
+    def get_labels_for_wells(
+        self,
+        wells: list[tuple[str, str]] | set[tuple[str, str]],
+    ) -> dict[tuple[str, str], str]:
+        """Assign deterministic pseudo-random labels to the given wells."""
+        return resolve_labels_for_wells(
+            wells, source="dummy", class_names=self.class_names, seed=self.seed
+        )
     
     def get_labels(
         self,
         root_dir: str,
         exclude_wells: list[tuple[str, str]] | None = None,
     ) -> dict[tuple[str, str], str]:
-        """Generate dummy string labels for all plate/well combinations in directory.
+        """Discover wells under ``root_dir`` and label them.
         
         Args:
             root_dir: Root directory containing images.
             exclude_wells: List of (plate, well) tuples to exclude (corrupted images).
         """
-        root_path = Path(root_dir)
-        plate_wells = set()
-        exclude_set = set(exclude_wells) if exclude_wells else set()
-        
-        for ext in MultiChannelImageDataset.SUPPORTED_EXTENSIONS:
-            for file_path in root_path.glob(f"*{ext}"):
-                match = MultiChannelImageDataset.FILENAME_PATTERN.match(file_path.name)
-                if match:
-                    info = match.groupdict()
-                    well_key = (info["plate"], info["well"])
-                    if well_key not in exclude_set:
-                        plate_wells.add(well_key)
-        
-        if exclude_wells:
-            print(f"Excluded {len(exclude_wells)} wells from dataset")
-        
-        # Generate consistent random labels
-        np.random.seed(self.seed)
-        labels = {}
-        for plate, well in sorted(plate_wells):
-            label_idx = np.random.randint(0, len(self.class_names))
-            labels[(plate, well)] = self.class_names[label_idx]
-        
-        return labels
+        wells = wells_from_index(scan_directory(root_dir), exclude_wells=exclude_wells)
+        return self.get_labels_for_wells(wells)
 
 
 class MongoDBLabelsProvider:
     """Label provider using MongoDB.
     
     Queries MongoDB to get labels for plate/well combinations.
+    
+    Label resolution itself lives in ``utils/labels.py`` (shared with the
+    monitoring jobs, which resolve labels for wells read out of the database
+    rather than off disk); this class is the directory-based wrapper.
     """
     
     def __init__(
         self,
-        collection: str = "labels",
+        collection: str = "tags",
     ):
         self.collection = collection
+    
+    def get_labels_for_wells(
+        self,
+        wells: list[tuple[str, str]] | set[tuple[str, str]],
+    ) -> dict[tuple[str, str], str]:
+        """Query MongoDB for the given wells' treatments."""
+        return resolve_labels_for_wells(
+            wells, source="mongodb", collection=self.collection
+        )
     
     def get_labels(
         self,
         root_dir: str,
         exclude_wells: list[tuple[str, str]] | None = None,
     ) -> dict[tuple[str, str], str]:
-        """Query MongoDB for labels (returns string Treatment values).
+        """Discover wells under ``root_dir`` and query MongoDB for their treatments.
         
         Args:
             root_dir: Root directory containing images.
             exclude_wells: List of (plate, well) tuples to exclude (corrupted images).
         """
-        from tools.loading import getCategories
-        
-        root_path = Path(root_dir)
-        plate_wells = set()
-        exclude_set = set(exclude_wells) if exclude_wells else set()
-        
-        # Find all plate/well combinations in directory
-        for ext in MultiChannelImageDataset.SUPPORTED_EXTENSIONS:
-            for file_path in root_path.glob(f"*{ext}"):
-                match = MultiChannelImageDataset.FILENAME_PATTERN.match(file_path.name)
-                if match:
-                    info = match.groupdict()
-                    well_key = (info["plate"], info["well"])
-                    if well_key not in exclude_set:
-                        plate_wells.add(well_key)
-        
-        if exclude_wells:
-            print(f"Excluded {len(exclude_wells)} wells from dataset")
-        
-        # Convert plate_wells set to list for DataFrame creation
-        plates = [pw[0] for pw in plate_wells]
-        wells = [pw[1] for pw in plate_wells]
-        
-        import pandas as pd
-        df = pd.DataFrame({"Plate": plates, "Well": wells})
-        df.drop_duplicates(inplace=True)
-        df_labels =  getCategories(df,collection= "tags")
-
-        # Convert to dictionary format
-        labels = dict(zip(zip(df_labels["Plate"], df_labels["Well"]), df_labels["Treatment"]))
-        
-        return labels
+        wells = wells_from_index(scan_directory(root_dir), exclude_wells=exclude_wells)
+        return self.get_labels_for_wells(wells)

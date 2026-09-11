@@ -8,9 +8,9 @@ Tests combinations of:
 
 Measures: samples/second throughput
 """
+import itertools
 import sys
 import time
-import itertools
 from pathlib import Path
 
 # Add src to path
@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 import torch
 from hydra.utils import instantiate
-from omegaconf import OmegaConf, DictConfig
+from omegaconf import DictConfig, OmegaConf
 
 
 def benchmark_config(
@@ -174,7 +174,7 @@ def run_benchmark():
     for r in successful[:10]:  # Top 10
         print(f"{r['num_workers']:<8} {r['batch_size']:<8} "
               f"{r.get('cache_size', '-'):<8} "
-              f"{str(r['pin_memory']):<8} {r['samples_per_sec']:<12}")
+              f"{r['pin_memory']!s:<8} {r['samples_per_sec']:<12}")
     
     if successful:
         best = successful[0]

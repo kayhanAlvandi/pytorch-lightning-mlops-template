@@ -1,0 +1,1220 @@
+{
+  "samples": [
+    {
+      "index": 0,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "J19",
+      "field": 6,
+      "label": "LPS/Nigericin",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_J19_T0001F006L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_J19_T0001F006L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_J19_T0001F006L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_J19_T0001F006L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_J19_T0001F006L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 1,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "I18",
+      "field": 1,
+      "label": "LPS/Nigericin",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_I18_T0001F001L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_I18_T0001F001L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_I18_T0001F001L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_I18_T0001F001L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_I18_T0001F001L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 2,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "I17",
+      "field": 2,
+      "label": "LPS/Nigericin",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_I17_T0001F002L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_I17_T0001F002L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_I17_T0001F002L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_I17_T0001F002L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_I17_T0001F002L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 3,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "J20",
+      "field": 3,
+      "label": "LPS/Nigericin",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_J20_T0001F003L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_J20_T0001F003L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_J20_T0001F003L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_J20_T0001F003L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_J20_T0001F003L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 4,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "K20",
+      "field": 4,
+      "label": "LPS/Nigericin",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_K20_T0001F004L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_K20_T0001F004L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_K20_T0001F004L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_K20_T0001F004L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_K20_T0001F004L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 5,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "I18",
+      "field": 7,
+      "label": "LPS/Nigericin",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_I18_T0001F007L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_I18_T0001F007L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_I18_T0001F007L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_I18_T0001F007L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_I18_T0001F007L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 6,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "J19",
+      "field": 9,
+      "label": "LPS/Nigericin",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_J19_T0001F009L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_J19_T0001F009L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_J19_T0001F009L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_J19_T0001F009L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_J19_T0001F009L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 7,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "J20",
+      "field": 5,
+      "label": "LPS/Nigericin",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_J20_T0001F005L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_J20_T0001F005L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_J20_T0001F005L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_J20_T0001F005L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_J20_T0001F005L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 8,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "K18",
+      "field": 5,
+      "label": "LPS/Nigericin",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_K18_T0001F005L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_K18_T0001F005L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_K18_T0001F005L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_K18_T0001F005L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_K18_T0001F005L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 9,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "I19",
+      "field": 9,
+      "label": "LPS/Nigericin",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_I19_T0001F009L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_I19_T0001F009L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_I19_T0001F009L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_I19_T0001F009L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_I19_T0001F009L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 10,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "K18",
+      "field": 4,
+      "label": "LPS/Nigericin",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_K18_T0001F004L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_K18_T0001F004L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_K18_T0001F004L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_K18_T0001F004L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_K18_T0001F004L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 11,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "K20",
+      "field": 9,
+      "label": "LPS/Nigericin",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_K20_T0001F009L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_K20_T0001F009L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_K20_T0001F009L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_K20_T0001F009L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_K20_T0001F009L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 12,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "I20",
+      "field": 4,
+      "label": "LPS/Nigericin",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_I20_T0001F004L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_I20_T0001F004L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_I20_T0001F004L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_I20_T0001F004L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_I20_T0001F004L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 13,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "I20",
+      "field": 6,
+      "label": "LPS/Nigericin",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_I20_T0001F006L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_I20_T0001F006L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_I20_T0001F006L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_I20_T0001F006L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_I20_T0001F006L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 14,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "J20",
+      "field": 6,
+      "label": "LPS/Nigericin",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_J20_T0001F006L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_J20_T0001F006L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_J20_T0001F006L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_J20_T0001F006L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_J20_T0001F006L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 15,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "J17",
+      "field": 9,
+      "label": "LPS/Nigericin",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_J17_T0001F009L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_J17_T0001F009L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_J17_T0001F009L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_J17_T0001F009L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_J17_T0001F009L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 16,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "J09",
+      "field": 4,
+      "label": "LPS/Unactivated",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_J09_T0001F004L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_J09_T0001F004L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_J09_T0001F004L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_J09_T0001F004L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_J09_T0001F004L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 17,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "I12",
+      "field": 4,
+      "label": "LPS/Unactivated",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_I12_T0001F004L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_I12_T0001F004L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_I12_T0001F004L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_I12_T0001F004L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_I12_T0001F004L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 18,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "J11",
+      "field": 8,
+      "label": "LPS/Unactivated",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_J11_T0001F008L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_J11_T0001F008L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_J11_T0001F008L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_J11_T0001F008L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_J11_T0001F008L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 19,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "J10",
+      "field": 9,
+      "label": "LPS/Unactivated",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_J10_T0001F009L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_J10_T0001F009L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_J10_T0001F009L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_J10_T0001F009L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_J10_T0001F009L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 20,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "I11",
+      "field": 5,
+      "label": "LPS/Unactivated",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_I11_T0001F005L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_I11_T0001F005L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_I11_T0001F005L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_I11_T0001F005L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_I11_T0001F005L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 21,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "K11",
+      "field": 9,
+      "label": "LPS/Unactivated",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_K11_T0001F009L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_K11_T0001F009L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_K11_T0001F009L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_K11_T0001F009L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_K11_T0001F009L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 22,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "J10",
+      "field": 1,
+      "label": "LPS/Unactivated",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_J10_T0001F001L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_J10_T0001F001L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_J10_T0001F001L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_J10_T0001F001L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_J10_T0001F001L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 23,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "J10",
+      "field": 3,
+      "label": "LPS/Unactivated",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_J10_T0001F003L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_J10_T0001F003L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_J10_T0001F003L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_J10_T0001F003L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_J10_T0001F003L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 24,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "J09",
+      "field": 7,
+      "label": "LPS/Unactivated",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_J09_T0001F007L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_J09_T0001F007L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_J09_T0001F007L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_J09_T0001F007L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_J09_T0001F007L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 25,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "K12",
+      "field": 4,
+      "label": "LPS/Unactivated",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_K12_T0001F004L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_K12_T0001F004L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_K12_T0001F004L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_K12_T0001F004L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_K12_T0001F004L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 26,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "I09",
+      "field": 4,
+      "label": "LPS/Unactivated",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_I09_T0001F004L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_I09_T0001F004L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_I09_T0001F004L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_I09_T0001F004L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_I09_T0001F004L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 27,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "K10",
+      "field": 7,
+      "label": "LPS/Unactivated",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_K10_T0001F007L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_K10_T0001F007L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_K10_T0001F007L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_K10_T0001F007L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_K10_T0001F007L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 28,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "J09",
+      "field": 9,
+      "label": "LPS/Unactivated",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_J09_T0001F009L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_J09_T0001F009L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_J09_T0001F009L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_J09_T0001F009L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_J09_T0001F009L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 29,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "I10",
+      "field": 5,
+      "label": "LPS/Unactivated",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_I10_T0001F005L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_I10_T0001F005L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_I10_T0001F005L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_I10_T0001F005L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_I10_T0001F005L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 30,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "K12",
+      "field": 5,
+      "label": "LPS/Unactivated",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_K12_T0001F005L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_K12_T0001F005L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_K12_T0001F005L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_K12_T0001F005L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_K12_T0001F005L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 31,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "K09",
+      "field": 4,
+      "label": "LPS/Unactivated",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_K09_T0001F004L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_K09_T0001F004L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_K09_T0001F004L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_K09_T0001F004L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_K09_T0001F004L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 32,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "K15",
+      "field": 9,
+      "label": "Unprimed/Nigericin",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_K15_T0001F009L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_K15_T0001F009L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_K15_T0001F009L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_K15_T0001F009L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_K15_T0001F009L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 33,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "K16",
+      "field": 4,
+      "label": "Unprimed/Nigericin",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_K16_T0001F004L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_K16_T0001F004L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_K16_T0001F004L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_K16_T0001F004L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_K16_T0001F004L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 34,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "J16",
+      "field": 1,
+      "label": "Unprimed/Nigericin",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_J16_T0001F001L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_J16_T0001F001L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_J16_T0001F001L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_J16_T0001F001L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_J16_T0001F001L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 35,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "J14",
+      "field": 3,
+      "label": "Unprimed/Nigericin",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_J14_T0001F003L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_J14_T0001F003L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_J14_T0001F003L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_J14_T0001F003L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_J14_T0001F003L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 36,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "I15",
+      "field": 2,
+      "label": "Unprimed/Nigericin",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_I15_T0001F002L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_I15_T0001F002L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_I15_T0001F002L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_I15_T0001F002L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_I15_T0001F002L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 37,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "J13",
+      "field": 6,
+      "label": "Unprimed/Nigericin",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_J13_T0001F006L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_J13_T0001F006L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_J13_T0001F006L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_J13_T0001F006L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_J13_T0001F006L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 38,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "I15",
+      "field": 1,
+      "label": "Unprimed/Nigericin",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_I15_T0001F001L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_I15_T0001F001L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_I15_T0001F001L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_I15_T0001F001L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_I15_T0001F001L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 39,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "J13",
+      "field": 5,
+      "label": "Unprimed/Nigericin",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_J13_T0001F005L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_J13_T0001F005L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_J13_T0001F005L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_J13_T0001F005L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_J13_T0001F005L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 40,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "J13",
+      "field": 1,
+      "label": "Unprimed/Nigericin",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_J13_T0001F001L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_J13_T0001F001L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_J13_T0001F001L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_J13_T0001F001L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_J13_T0001F001L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 41,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "I16",
+      "field": 7,
+      "label": "Unprimed/Nigericin",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_I16_T0001F007L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_I16_T0001F007L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_I16_T0001F007L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_I16_T0001F007L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_I16_T0001F007L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 42,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "I15",
+      "field": 6,
+      "label": "Unprimed/Nigericin",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_I15_T0001F006L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_I15_T0001F006L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_I15_T0001F006L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_I15_T0001F006L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_I15_T0001F006L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 43,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "K13",
+      "field": 7,
+      "label": "Unprimed/Nigericin",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_K13_T0001F007L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_K13_T0001F007L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_K13_T0001F007L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_K13_T0001F007L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_K13_T0001F007L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 44,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "J14",
+      "field": 5,
+      "label": "Unprimed/Nigericin",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_J14_T0001F005L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_J14_T0001F005L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_J14_T0001F005L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_J14_T0001F005L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_J14_T0001F005L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 45,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "K15",
+      "field": 4,
+      "label": "Unprimed/Nigericin",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_K15_T0001F004L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_K15_T0001F004L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_K15_T0001F004L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_K15_T0001F004L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_K15_T0001F004L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 46,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "K16",
+      "field": 5,
+      "label": "Unprimed/Nigericin",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_K16_T0001F005L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_K16_T0001F005L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_K16_T0001F005L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_K16_T0001F005L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_K16_T0001F005L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 47,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "I15",
+      "field": 3,
+      "label": "Unprimed/Nigericin",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_I15_T0001F003L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_I15_T0001F003L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_I15_T0001F003L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_I15_T0001F003L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_I15_T0001F003L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 48,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "J06",
+      "field": 2,
+      "label": "Unprimed/Unactivated",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_J06_T0001F002L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_J06_T0001F002L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_J06_T0001F002L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_J06_T0001F002L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_J06_T0001F002L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 49,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "I07",
+      "field": 8,
+      "label": "Unprimed/Unactivated",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_I07_T0001F008L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_I07_T0001F008L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_I07_T0001F008L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_I07_T0001F008L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_I07_T0001F008L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 50,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "J07",
+      "field": 1,
+      "label": "Unprimed/Unactivated",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_J07_T0001F001L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_J07_T0001F001L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_J07_T0001F001L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_J07_T0001F001L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_J07_T0001F001L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 51,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "I05",
+      "field": 4,
+      "label": "Unprimed/Unactivated",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_I05_T0001F004L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_I05_T0001F004L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_I05_T0001F004L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_I05_T0001F004L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_I05_T0001F004L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 52,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "I06",
+      "field": 3,
+      "label": "Unprimed/Unactivated",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_I06_T0001F003L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_I06_T0001F003L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_I06_T0001F003L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_I06_T0001F003L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_I06_T0001F003L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 53,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "J06",
+      "field": 8,
+      "label": "Unprimed/Unactivated",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_J06_T0001F008L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_J06_T0001F008L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_J06_T0001F008L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_J06_T0001F008L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_J06_T0001F008L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 54,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "J06",
+      "field": 3,
+      "label": "Unprimed/Unactivated",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_J06_T0001F003L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_J06_T0001F003L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_J06_T0001F003L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_J06_T0001F003L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_J06_T0001F003L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 55,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "K07",
+      "field": 5,
+      "label": "Unprimed/Unactivated",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_K07_T0001F005L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_K07_T0001F005L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_K07_T0001F005L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_K07_T0001F005L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_K07_T0001F005L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 56,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "K08",
+      "field": 2,
+      "label": "Unprimed/Unactivated",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_K08_T0001F002L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_K08_T0001F002L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_K08_T0001F002L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_K08_T0001F002L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_K08_T0001F002L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 57,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "K07",
+      "field": 1,
+      "label": "Unprimed/Unactivated",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_K07_T0001F001L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_K07_T0001F001L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_K07_T0001F001L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_K07_T0001F001L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_K07_T0001F001L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 58,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "K06",
+      "field": 5,
+      "label": "Unprimed/Unactivated",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_K06_T0001F005L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_K06_T0001F005L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_K06_T0001F005L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_K06_T0001F005L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_K06_T0001F005L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 59,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "K05",
+      "field": 2,
+      "label": "Unprimed/Unactivated",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_K05_T0001F002L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_K05_T0001F002L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_K05_T0001F002L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_K05_T0001F002L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_K05_T0001F002L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 60,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "I07",
+      "field": 5,
+      "label": "Unprimed/Unactivated",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_I07_T0001F005L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_I07_T0001F005L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_I07_T0001F005L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_I07_T0001F005L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_I07_T0001F005L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 61,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "K05",
+      "field": 6,
+      "label": "Unprimed/Unactivated",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_K05_T0001F006L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_K05_T0001F006L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_K05_T0001F006L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_K05_T0001F006L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_K05_T0001F006L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 62,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "J05",
+      "field": 2,
+      "label": "Unprimed/Unactivated",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_J05_T0001F002L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_J05_T0001F002L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_J05_T0001F002L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_J05_T0001F002L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_J05_T0001F002L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    },
+    {
+      "index": 63,
+      "plate": "MIG-Exp06-CP-40X-bin1X1",
+      "well": "I07",
+      "field": 7,
+      "label": "Unprimed/Unactivated",
+      "root_path": "/mnt/O/BTSData/MeasurementData/MIG/MIG-Exp06-CP-40X-bin1X1_20230908_143704/MIG-Exp06-CP-40X-bin1X1",
+      "channel_files": {
+        "1": "MIG-Exp06-CP-40X-bin1X1_I07_T0001F007L01A01Z01C01.jxl",
+        "2": "MIG-Exp06-CP-40X-bin1X1_I07_T0001F007L01A01Z01C02.jxl",
+        "3": "MIG-Exp06-CP-40X-bin1X1_I07_T0001F007L01A02Z01C03.jxl",
+        "4": "MIG-Exp06-CP-40X-bin1X1_I07_T0001F007L01A03Z01C04.jxl",
+        "5": "MIG-Exp06-CP-40X-bin1X1_I07_T0001F007L01A04Z01C05.jxl"
+      },
+      "shape": [
+        2160,
+        2560
+      ]
+    }
+  ]
+}

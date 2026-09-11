@@ -1,5 +1,12 @@
 [tool.ruff.lint.isort]
 known-first-party = ["database", "utils", "api"]
 
+# Naive datetimes are intentional throughout the monitoring stack: PostgreSQL
+# columns are TIMESTAMP (without timezone), and mixing tz-aware and tz-naive
+# values would create comparison/type inconsistencies. A coordinated migration
+# to TIMESTAMPTZ would be needed before these can be addressed.
+[tool.ruff.lint]
+ignore = ["DTZ001", "DTZ005"]
+
 [dependency-groups]
 dev = ["ruff==0.16.1"]

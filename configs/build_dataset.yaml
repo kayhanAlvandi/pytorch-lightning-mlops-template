@@ -1,0 +1,20 @@
+# Hydra config for scripts/build_dataset.py (standalone dataset builder).
+# Separate from config.yaml because building a dataset definition needs no
+# model/optimizer/trainer/callbacks -- only selection filters.
+defaults:
+  - dataset_spec: benchmark
+  - _self_
+
+# Output name; artifacts are written to <output_root>/<name>/
+name: null          # defaults to the dataset_spec's own name if unset
+output_root: data
+
+# "per_sample" reads each sample's image header so the shape is persisted in the
+# manifest (benchmark registration then needs no image access at all).
+# "first" reads one image and reuses its size; null skips shape reading.
+shape_mode: first
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null

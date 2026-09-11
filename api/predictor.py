@@ -43,8 +43,51 @@ class Normalize:
         return (x - mean) / (std + self.eps)
 
 
+def compute_stats(pixels: torch.Tensor) -> tuple[float, float, float, float, float, float]:
+    """Compute pixel-intensity summary statistics for one channel of one tile.
 
+    Used for input-drift monitoring: mean/std/percentiles of a single-channel
+    tile's raw (preprocessed) pixel values, stored in tile_channel_stats.
 
+    Args:
+        pixels: Tensor of shape (crop_size, crop_size) -- one channel of one tile.
+
+    Returns:
+        (mean, std, p1, p5, p95, p99) as plain Python floats.
+    """
+    flat = pixels.reshape(-1).float()
+    mean = flat.mean().item()
+    std = flat.std().item()
+    p1, p5, p95, p99 = torch.quantile(
+        flat, torch.tensor([0.01, 0.05, 0.95, 0.99], dtype=flat.dtype)
+    ).tolist()
+    return mean, std, p1, p5, p95, p99
+
+def chans_reorder(image_channels: list[np.ndarray], image_metadata: dict) -> tuple[np.ndarray, dict]:
+    """Canonicalize channel order to match training.
+
+    src/dataset.py always stacks channels sorted ascending by channel number
+    (`self.channels = sorted(channels)`), so inference must use that exact
+    same order regardless of upload order, or the model sees
+    out-of-distribution input whenever a caller doesn't happen to upload
+    files in C1..CN order.
+
+    Returns a new (C, H, W) ndarray and a *shallow copy* of image_metadata
+    with `channels` and `channel_files` reordered. The caller's dict is left
+    untouched so manifest-derived metadata (e.g. from compute_predictions_references) is
+    not mutated as a side effect of prediction.
+    """
+    parsed_channels = image_metadata['channels']
+    if len(set(parsed_channels)) != len(parsed_channels):
+        raise ValueError(f"Duplicate channel numbers in upload: {parsed_channels}")
+    order = sorted(range(len(image_channels)), key=lambda i: parsed_channels[i])
+    ordered_image_channels = [image_channels[i] for i in order]
+    # shallow copy so the caller's dict is not mutated in place
+    reordered_metadata = dict(image_metadata)
+    reordered_metadata['channels'] = [image_metadata['channels'][i] for i in order]
+    reordered_metadata['channel_files'] = [image_metadata['channel_files'][i] for i in order]
+
+    return np.stack(ordered_image_channels, axis=0), reordered_metadata
 
 class TilePredictor:
     """Loads a trained model and performs tiled prediction on images.
@@ -121,17 +164,14 @@ class TilePredictor:
                 "run_name (e.g. 'my_training_run')"
             )
         
-        # Extract config from MLflow run artifacts if we have a run_id
-        if run_id:
-            info.update(self._load_run_config(run_id))
-        
-        # Ensure class_names is always set
-        if "class_names" not in info:
-            if hasattr(model, "class_names") and model.class_names:
-                info["class_names"] = model.class_names
-            else:
-                info["class_names"] = [str(i) for i in range(model.num_classes)]
-        
+        # Extract config from MLflow run artifacts if we have a run_id.
+        # class_names order must match the model's output logits exactly, so
+        # this must come from dataset_metadata.json -- no silent fallback to
+        # a guessed/differently-ordered class list, or every prediction gets
+        # mislabeled without any indication something went wrong.
+        if not run_id:
+            raise ValueError("No run_id resolved; cannot load artifacts")
+        info.update(self._load_run_config(run_id))
         info["run_id"] = run_id
         info["model_class"] = model.__class__.__name__
         info["num_classes"] = model.num_classes
@@ -215,46 +255,53 @@ class TilePredictor:
             f"No logged model found for run {run_id} (checked run artifact and registry)"
         )
     
-    def _download_hydra_config(self, run_id: str):
+    def _download_artifact(self, run_id: str):
         """Download and parse hydra_config.yaml from MLflow run artifacts."""
         artifact_dir = mlflow.artifacts.download_artifacts(
             run_id=run_id, tracking_uri=self.tracking_uri,
         )
-        config_path = Path(artifact_dir) / "hydra_config.yaml"
-        return OmegaConf.load(config_path)
+        return artifact_dir
     
     def _load_run_config(self, run_id: str) -> dict:
         """Extract crop_size, channels, class_names from MLflow run artifacts."""
         info = {}
+        try:
+            info['artifact_dir'] = self._download_artifact(run_id)
+        except Exception as e: 
+            raise RuntimeError(
+                f"Could not download artifacts for run {run_id}"
+            ) from e
         
         try:
-            cfg = self._download_hydra_config(run_id)
+            config_path = Path(info['artifact_dir']) / "hydra_config.yaml"
+            cfg = OmegaConf.load(config_path)
             ds_cfg = cfg.datamodule.dataset
             info["crop_size"] = ds_cfg.get("crop_size", 224)
             info["in_channels"] = len(list(ds_cfg.get("channels", [1, 2, 3, 4, 5])))
             
             backbone = cfg.model.get("backbone_name", cfg.model.get("_target_", "unknown"))
             info["backbone"] = backbone
-        except Exception as e:  # noqa: BLE001
-            print(f"  Warning: could not load hydra config: {e}")
+        except Exception as e:
+            raise RuntimeError(
+                f"Could not load hydra config for run {run_id}: {e}"
+            ) from e
         
-        # Load class names from dataset manifest
-        try:
-            artifact_dir = mlflow.artifacts.download_artifacts(
-                run_id=run_id, tracking_uri=self.tracking_uri,
+
+        metadata_path = Path(info['artifact_dir']) / "dataset_metadata.json"
+        if not metadata_path.exists():
+            raise FileNotFoundError(
+                f"dataset_metadata.json not found in run {run_id} artifacts "
+                f"({metadata_path}); cannot determine class_names order."
             )
-            manifest_path = Path(artifact_dir) / "dataset_manifest.json"
-            if manifest_path.exists():
-                with open(manifest_path) as f:
-                    manifest = json.load(f)
-                all_labels = sorted({
-                    s["label"] for s in manifest.get("train_samples", []) + manifest.get("val_samples", [])
-                })
-                if all_labels:
-                    info["class_names"] = all_labels
-        except Exception as e:  # noqa: BLE001
-            print(f"  Warning: could not load dataset manifest: {e}")
-        
+        with open(metadata_path) as f:
+            dataset_metadata = json.load(f)
+        class_names = dataset_metadata.get("class_names")
+        if not class_names:
+            raise ValueError(
+                f"dataset_metadata.json for run {run_id} has no class_names."
+            )
+        info["class_names"] = class_names
+
         return info
     
     def preprocess_image(self, image: np.ndarray) -> torch.Tensor:
@@ -380,22 +427,26 @@ class TilePredictor:
             "vote_fraction": winner_count / len(tile_predictions),
         }
     
-    def predict(self, image: np.ndarray, image_metadata: list[dict]) -> dict:
+    def predict(self, channels_image: list[np.ndarray], image_metadata: dict) -> dict:
         """Full prediction pipeline: preprocess -> tile -> predict -> majority vote.
         
         Args:
-            image: numpy array of shape (C, H, W), raw pixel values
-            image_metadata: list of dictionaries containing image metadata (filename , root_path , shape)
+            channels_image: list of numpy arrays of shape (H, W), raw pixel values
+            image_metadata: dictionary containg plate,well,field, root_path ,shape, channels [list of channel names in order of image channels], channel_files [list of filenames in order of image channels], and optionally label and is_reference
             
         Returns:
             Dict with 'tile_predictions' and 'image_prediction' (majority vote)
         """
 
-        cleaned_image_metadata = clean_image_metadata(image_metadata)
+        
         img_ids = None
         tile_stack_ids = None
+        ## one source to reorder the input metdata and image channels to ascending order
+        image, image_metadata = chans_reorder(channels_image, image_metadata)
+
 
         if self.db_logger:
+            cleaned_image_metadata = clean_image_metadata(image_metadata)
             img_ids = self.db_logger.log_image_metadata(cleaned_image_metadata)
 
         # Preprocess
@@ -404,23 +455,34 @@ class TilePredictor:
         # Tile
         tiles = self.tile_image(tensor)
 
+
         if self.db_logger:
             # Log tile stack metadata (one stack_hash per tile position, shared by all channels)
             tiles_metadata = clean_tiles_metadata(tiles, img_ids)
             tile_stack_ids = self.db_logger.log_tile_stack(tiles_metadata)
             # Each tile stack has all channel images as members. channel_index
             # is img_ids' position, which is the model's input channel-axis
-            # position (img_ids is built from image_metadata, which is now
+            # position. img_ids is built from image_metadata, which is
             # canonicalized to ascending channel-number order by
-            # api/main.py::_load_image_from_uploads before predict() is
-            # called) -- stored explicitly so it doesn't need to be
-            # reconstructed later.
+            # chans_reorder() at the top of predict() -- stored explicitly so
+            # it doesn't need to be reconstructed later.
             tile_stack_members = [
                 (tile_stack_id, img_id, channel_index)
                 for tile_stack_id in tile_stack_ids
                 for channel_index, img_id in enumerate(img_ids)
             ]
-            self.db_logger.log_tile_stack_member(tile_stack_members)
+            tile_stack_member_ids = self.db_logger.log_tile_stack_member(tile_stack_members)
+
+            n_channels = len(img_ids)
+            channel_stats_rows = []
+            for tile_idx, tile_info in enumerate(tiles):
+                tile_tensor = tile_info["tile"]                      # (C, crop, crop)
+                for channel_idx in range(n_channels):
+                    member_id = tile_stack_member_ids[tile_idx * n_channels + channel_idx]
+                    pixels = tile_tensor[channel_idx]
+                    channel_stats_rows.append((member_id, *compute_stats(pixels)))
+        
+            _ = self.db_logger.log_tile_channel_stats(channel_stats_rows)
 
         # Predict per tile
         tile_predictions = self.predict_tiles(tiles)
@@ -431,29 +493,32 @@ class TilePredictor:
         if self.db_logger:
             # Log image prediction
             image_prediction_db = (
-                cleaned_image_metadata[0][0],
-                cleaned_image_metadata[0][1],
-                cleaned_image_metadata[0][2],
+                image_metadata["plate"],
+                image_metadata["well"],
+                image_metadata["field"],
                 self.model_info["run_id"],
                 image_prediction["predicted_class"],
-                None,
+                image_metadata.get("label", None),
                 image_prediction["total_tiles"],
                 image_prediction["vote_fraction"],
                 image_prediction["confidence"],
+                image_metadata.get("is_reference", False),
+                image_metadata.get("benchmark_id", None),
             )
             img_pred_id = self.db_logger.log_image_prediction(image_prediction_db)
             # Log tile predictions (one row per tile)
             tile_predictions_db = [
                 (img_pred_id, tile_stack_ids[i], self.model_info["run_id"],
-                 tile["predicted_class"], None, tile["confidence"])
+                 tile["predicted_class"], image_metadata.get("label", None), tile["confidence"],
+                 image_metadata.get("is_reference", False), image_metadata.get("benchmark_id", None))
                 for i, tile in enumerate(tile_predictions)
             ]
             self.db_logger.log_tile_prediction(tile_predictions_db)
 
         result = {
-            "plate": cleaned_image_metadata[0][0],
-            "well": cleaned_image_metadata[0][1],
-            "field": cleaned_image_metadata[0][2],
+            "plate": image_metadata["plate"],
+            "well": image_metadata["well"],
+            "field": image_metadata["field"],
             "run_id": self.model_info["run_id"],
             "predicted_class": image_prediction["predicted_class"],
             "total_tiles": image_prediction["total_tiles"],

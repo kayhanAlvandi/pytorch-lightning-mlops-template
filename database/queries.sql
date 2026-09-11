@@ -14,3 +14,13 @@ SELECT * FROM image_metadata;
 SELECT * FROM tile_stack LIMIT 10;
 
 SELECT * FROM tile_stack_member t WHERE t.tile_stack_id = 2 LIMIT 10;
+
+-- list all the tables
+SELECT table_name 
+FROM information_schema.tables 
+WHERE table_schema = 'public'
+ORDER BY table_name;
+
+Select * FROM tile_channel_stats;
+
+Select * FROM reference_image_prediction;

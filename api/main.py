@@ -136,17 +136,16 @@ async def db_info():
 
 @app.post("/predict")
 async def predict(
-    files: list[UploadFile] = File(..., description="Image files (one per channel, ordered C1..CN) or a single multi-channel .tif/.npy file"),  # noqa: B008
+    files: list[UploadFile] = File(..., description="Image files (one per channel, ordered C1..CN)"),  # noqa: B008
     root_path: str = Form(..., description="Root path for the image"),
     crop_size: int | None = Query(None, description="Override tile crop size"),
     stride: int | None = Query(None, description="Override tile stride"),
 ):
     """Predict on an uploaded image.
-    
-    Accepts either:
-    - A single .npy file containing a pre-stacked (C, H, W) array
-    - Multiple image files (one per channel), which will be stacked in upload order
-    
+
+    Accepts multiple image files (one per channel), which are stacked in
+    ascending channel-number order to match training.
+
     Returns per-tile predictions and a majority-vote whole-image prediction.
     """
     if predictor is None:
@@ -156,12 +155,8 @@ async def predict(
         )
     
     try:
-        image_metadata,image = await _load_image_from_uploads(files)
-        temp = []
-        for metadata in image_metadata:
-            metadata["root_path"] = root_path
-            temp.append(metadata)
-        image_metadata = temp
+        image_metadata,image_channels = await _load_image_from_uploads(files)
+        image_metadata["root_path"] = root_path
         
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -178,7 +173,9 @@ async def predict(
         predictor.stride = stride
     
     try:
-        result = predictor.predict(image, image_metadata)
+        result = predictor.predict(image_channels, image_metadata)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     finally:
         # Restore original settings
         predictor.crop_size = original_crop
@@ -186,64 +183,62 @@ async def predict(
     
     return JSONResponse(content=result)
 
-
-async def _load_image_from_uploads(files: list[UploadFile]) -> tuple[list[dict], np.ndarray]:
-    """Load uploaded files into a (C, H, W) numpy array.
+def extract_infos(filenames : list[str]) -> dict:
+    """Extract information from filenames.
     
-    - Single .npy file: already stacked (C, H, W)
-    - One or more image files (.tif, .jxl, etc.): each file = one channel, stacked in order
+    - filenames: list of filenames
     """
     infos = []
-    if len(files) == 1:
-        content = await files[0].read()
-        filename = files[0].filename or "upload"
-        
-        if filename.endswith(".npy"):
-            image = np.load(io.BytesIO(content))
-            if image.ndim != 3:
-                raise ValueError(f"Expected 3D array (C, H, W), got shape {image.shape}")
-            info = {"shape": image.shape[1:], "filename": filename}
-            infos.append(info)
-            return infos, image.astype(np.float32)
-
-        # Single image file = single channel
-        img = _load_single_image(content, filename)
-        info = {"shape": img.shape, "filename": filename}
+    for filename in filenames:
+        info = extract_info_from_filename(filename)
         infos.append(info)
-        return infos, img[np.newaxis].astype(np.float32)
-    else:
-        # Multiple files: each file = one channel
-        channels = []
-        for f in files:
-            content = await f.read()
-            img = _load_single_image(content, f.filename or "upload")
-            info = {}
-            info["shape"] = img.shape
-            info["filename"] = f.filename or "upload"
-            channels.append(img)
-            infos.append(info)
+    
+    ## normalize metdata shape like training metdata
+    ## all plates , well, and fields should be the same for one sample
+    assert len({info["plate"] for info in infos}) == 1, "All plates should be the same for one sample"
+    assert len({info["well"] for info in infos}) == 1, "All wells should be the same for one sample"
+    assert len({info["field"] for info in infos}) == 1, "All fields should be the same for one sample"
+
+
+
+    infos_dict = {
+        "plate": infos[0]["plate"],
+        "well": infos[0]["well"],
+        "field": infos[0]["field"],
+        "channel_files": [info["filename"] for info in infos],
+        "channels" : [info["channel"] for info in infos]
+    }
+    return infos_dict
+
+
+async def _load_image_from_uploads(files: list[UploadFile]) -> tuple[dict, list[np.ndarray]]:
+    """Load uploaded files into a list of per-channel (H, W) numpy arrays.
+
+    - One or more image files (.tif, .jxl, etc.): each file = one channel,
+      returned in upload order. Channel-axis canonicalization to ascending
+      channel number happens later, inside TilePredictor.predict via
+      chans_reorder, so this function stays a pure loader.
+    """
+    file_names = []
+    # Multiple files: each file = one channel
+    channels = []
+    for f in files:
+        content = await f.read()
+        img = _load_single_image(content, f.filename or "upload")
+        channels.append(img)
+        file_names.append(f.filename or "upload")
         
-        shapes = [ch.shape for ch in channels]
-        if len(set(shapes)) > 1:
-            raise ValueError(f"All channel images must have same dimensions. Got: {shapes}")
-        assert len(infos) == len(channels)
+    shapes = [ch.shape for ch in channels]
+    if len(set(shapes)) > 1:
+        raise ValueError(f"All channel images must have same dimensions. Got: {shapes}")
+    assert len(file_names) == len(channels)
 
-        # Canonicalize channel order to match training: src/dataset.py always
-        # stacks channels sorted ascending by channel number
-        # (`self.channels = sorted(channels)`), so inference must use that
-        # exact same order regardless of upload order, or the model sees
-        # out-of-distribution input whenever a caller doesn't happen to
-        # upload files in C1..CN order.
-        parsed_channels = [extract_info_from_filename(info["filename"])["channel"] for info in infos]
-        if len(set(parsed_channels)) != len(parsed_channels):
-            raise ValueError(f"Duplicate channel numbers in upload: {parsed_channels}")
-        order = sorted(range(len(channels)), key=lambda i: parsed_channels[i])
-        channels = [channels[i] for i in order]
-        infos = [infos[i] for i in order]
+    ## extract infos from filenames
+    infos = extract_infos(file_names)
+    infos["shape"] = channels[0].shape
 
-        return infos, np.stack(channels, axis=0).astype(np.float32)
-
-
+    return infos, channels
+    
 def _load_single_image(content: bytes, filename: str) -> np.ndarray:
     """Load a single image from bytes into a 2D numpy array."""
     import cv2
@@ -264,3 +259,6 @@ def _load_single_image(content: bytes, filename: str) -> np.ndarray:
         raise ValueError(f"Failed to decode image: {filename}")
  
     return img.astype(np.float32)
+
+
+

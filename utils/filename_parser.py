@@ -29,28 +29,26 @@ def extract_info_from_filename(filename: str) -> dict:
     }
 
 
-def clean_image_metadata(image_metadata: list[dict]) -> list[tuple]:
+def clean_image_metadata(image_metadata: dict) -> list[tuple]:
     """Convert raw upload metadata into DB-ready tuples.
 
     Args:
-        image_metadata: list of dicts with keys 'filename', 'shape', 'root_path'
-            (as built by the API from UploadFile objects).
+        image_metadata: dict with keys 'plate', 'well', 'field', 'channels' [list of channel name in order], 'channel_files' [list of file names in order]
 
     Returns:
         list of tuples: (plate, well, field, channel, root_path, file_name, shape_x, shape_y)
     """
     cleaned = []
-    for metadata in image_metadata:
-        parsed = extract_info_from_filename(metadata["filename"])
+    for i in range(len(image_metadata["channels"])):
         row = (
-            parsed["plate"],
-            parsed["well"],
-            parsed["field"],
-            parsed["channel"],
-            metadata["root_path"],
-            metadata["filename"],
-            metadata["shape"][0],
-            metadata["shape"][1],
+            image_metadata["plate"],
+            image_metadata["well"],
+            image_metadata["field"],
+            image_metadata["channels"][i],
+            image_metadata["root_path"],
+            image_metadata["channel_files"][i],
+            image_metadata["shape"][0],
+            image_metadata["shape"][1],
         )
         cleaned.append(row)
     return cleaned

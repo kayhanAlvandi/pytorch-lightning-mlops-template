@@ -2,7 +2,6 @@
 import subprocess
 import time
 
-
 # Define experiment configurations
 # Format: (model_config_name, description, extra_overrides, extra_tags)
 EXPERIMENTS = [

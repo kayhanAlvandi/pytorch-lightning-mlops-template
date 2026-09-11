@@ -1,0 +1,105 @@
+name: Tests-Monitoring
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'monitoring/**'
+      - 'tests/monitoring/**'
+      - 'database/init/**'
+      - 'database/dblogger.py'
+      - 'utils/filename_parser.py'
+      - 'utils/labels.py'
+      - 'requirements/monitoring_req.txt'
+      - 'requirements/db_req.txt'
+      - 'requirements/api_req.txt'
+      - '.github/workflows/ci_monitoring.yml'
+      - '.github/actions/setup-env/**'
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+
+jobs:
+  # ───────────────────────────────────────────────────────────────────────────
+  # Lightweight monitoring unit tests (no DB, no torch, no MLflow).
+  # Covers config, register_benchmark (manifest mode), backfill_labels (mocked),
+  # run_drift_report helpers, run_quality_report helpers.
+  # ───────────────────────────────────────────────────────────────────────────
+  monitoring-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run ruff check
+        uses: astral-sh/ruff-action@v3
+        with:
+          args: check
+          src: "monitoring/ tests/monitoring/"
+      - name: Set up Python
+        uses: ./.github/actions/setup-env
+        with:
+          requirements_file: requirements/monitoring_req.txt
+      - name: Run monitoring unit tests
+        run: pytest tests/monitoring/unit -q
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # DB integration tests for monitoring (benchmark registration, view
+  # partitioning, label backfill, drift/quality DB methods).
+  # Uses requirements/db_req.txt (psycopg only) + a PostgreSQL 16 service.
+  # ───────────────────────────────────────────────────────────────────────────
+  monitoring-db:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        db_user: [admin]
+        db_pass: [admin123456]
+        db_host: [localhost]
+        db_port: [5432]
+        db_name: [test]
+    env:
+      DB_USER: ${{ matrix.db_user }}
+      DB_PASS: ${{ matrix.db_pass }}
+      DB_HOST: ${{ matrix.db_host }}
+      DB_PORT: ${{ matrix.db_port }}
+      DB_NAME: ${{ matrix.db_name }}
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ${{ matrix.db_user }}
+          POSTGRES_PASSWORD: ${{ matrix.db_pass }}
+          POSTGRES_DB: ${{ matrix.db_name }}
+        ports:
+          - ${{ matrix.db_port }}:5432
+        options: >-
+          --health-cmd "pg_isready -U ${{ matrix.db_user }} -d ${{ matrix.db_name }}"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: ./.github/actions/setup-env
+        with:
+          requirements_file: requirements/db_req.txt
+      - name: Run monitoring DB tests
+        env:
+          DB_TEST_URI: "postgresql://${{ env.DB_USER }}:${{ env.DB_PASS }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}/${{ env.DB_NAME }}"
+        run: pytest tests/monitoring/db -v
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Inference helper tests for compute_predictions_references.py.
+  # Uses requirements/api_req.txt because the module imports api.config and
+  # api.predictor (torch, mlflow, timm) at module level. Tests only cover pure
+  # helper functions (_group_members) that don't load models or images.
+  # ───────────────────────────────────────────────────────────────────────────
+  monitoring-inference:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: ./.github/actions/setup-env
+        with:
+          requirements_file: requirements/api_req.txt
+      - name: Run monitoring inference tests
+        run: pytest tests/monitoring/inference -q

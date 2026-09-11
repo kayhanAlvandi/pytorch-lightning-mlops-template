@@ -1,8 +1,9 @@
 """Inspect checkpoint contents to find OmegaConf types leaking in."""
-import torch
 import sys
 from pathlib import Path
-from omegaconf import ListConfig, DictConfig
+
+import torch
+from omegaconf import DictConfig, ListConfig
 
 
 def find_omegaconf_types(obj, path="", depth=0, max_depth=10):

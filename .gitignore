@@ -65,6 +65,7 @@ coverage.xml
 .env
 .env.api
 .env.training
+.env.monitoring
 docker/.env
 .venv
 env/
@@ -92,7 +93,8 @@ runs/
 events.out.tfevents.*
 
 # Data (don't commit large data files)
-data/
+monitoring/reports/*
+data/**
 !configs/
 *.jxl
 *.tif
@@ -109,6 +111,14 @@ Thumbs.db
 # Dataset metadata
 dataset_metadata.json
 dataset_manifest.json
+
+# ...except built dataset definitions under data/<name>/ (small JSON, versioned
+# on purpose -- a benchmark set every future model is compared against has to be
+# frozen and reviewable; see docs/plans/dataset-builder.md).
+# Must come after the data/** and dataset_*.json rules above: last match wins.
+!data/benchmark*/
+!data/benchmark*/dataset_metadata.json
+!data/benchmark*/dataset_manifest.json
 
 ## ignore agents rules
 AGENTS.md
