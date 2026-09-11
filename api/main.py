@@ -174,6 +174,8 @@ async def predict(
     
     try:
         result = predictor.predict(image_channels, image_metadata)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     finally:
         # Restore original settings
         predictor.crop_size = original_crop
