@@ -66,6 +66,16 @@ register-benchmark-run: network
 	docker compose -f jobs/monitoring/docker-compose.yaml run --rm register-benchmark \
 		$(if $(CMD),$(CMD),python -m monitoring.register_benchmark --manifest $(BENCHMARK_MANIFEST))
 
+# Usage: make mlflow-gc                      (permanently purges soft-deleted runs + their registry entries)
+#    or: make mlflow-gc ARGS="--dry-run"      (preview only, no changes)
+#    or: make mlflow-gc ARGS="--older-than 30d"
+# Deletes registered model versions pointing at runs already trashed in the
+# MLflow UI, then runs `mlflow gc` to permanently remove those runs' metadata
+# and artifacts and reclaim disk space. Piped over stdin -- no volume mount
+# or image rebuild needed.
+mlflow-gc:
+	docker compose -f services/mlflow/docker-compose.yaml exec -T mlflow python - $(ARGS) < ../scripts/mlflow_purge_deleted.py
+
 # ── Teardown (each is independent — won't affect others) ─────────────────
 down-mlflow:
 	docker compose -f services/mlflow/docker-compose.yaml down
