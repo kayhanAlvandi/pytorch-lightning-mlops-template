@@ -8,11 +8,7 @@ services:
     volumes:
       - ${O_DRIVE_PATH}:/mnt/O:rw # dataset access
       - ${TOOLS_LIB_PATH}:/workspace/tools:ro # access to tools library
-      - ../../../train.py:/workspace/train.py:ro # training script
-      - ../../../configs:/workspace/configs:ro # config files
-      - ../../../src:/workspace/src:ro # source code
-      - ../../../utils:/workspace/utils:ro # utils directory
-      - ../../../logs:/workspace/logs:rw # tensorboard logs
+      - ../../..:/workspace:rw # project root
     deploy:
       resources:
         reservations:

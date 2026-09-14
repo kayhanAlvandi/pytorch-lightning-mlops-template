@@ -29,6 +29,7 @@ wheels/
 *.manifest
 *.spec
 
+## mlflow
 mlruns/
 mlruns_backup/
 mlflow.db*
@@ -79,8 +80,12 @@ ENV/
 *.swo
 .devin/
 
+## configs
+configs_downloaded/
+
 # PyTorch / Lightning
 logs/
+outputs/
 lightning_logs/
 checkpoints/
 *.ckpt
