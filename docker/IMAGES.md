@@ -50,4 +50,4 @@ echo $GHCR_TOKEN | docker login ghcr.io -u <username> --password-stdin
 `docker/jobs/compute_references` reference the GHCR images (pull, no local
 build). Local builds are kept for iteration where pushing isn't wanted:
 `docker/jobs/train` (training), `docker/jobs/build_dataset`, and the api
-`docker-compose.dev.yaml` overlay (`serve-dev`, tagged `image_classifier_api:dev`).
+`docker-compose.dev.yaml` overlay (`serve-dev`, tagged `api:dev`).

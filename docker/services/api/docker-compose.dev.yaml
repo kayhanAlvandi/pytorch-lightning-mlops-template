@@ -13,7 +13,7 @@ services:
     build:
       context: ../../..
       dockerfile: docker/services/api/Dockerfile
-    image: image_classifier_api:dev
+    image: api:dev
     volumes:
       - ../../../api:/app/api:ro
       - ../../../utils:/app/utils:ro
