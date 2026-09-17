@@ -3,6 +3,7 @@ services:
     build:
       context: ../../..
       dockerfile: docker/jobs/train/Dockerfile
+    image: image_classifier_training
     container_name: training
     env_file: .env.training
     volumes:
@@ -16,23 +17,6 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
-    networks:
-      - ml-platform
-  
-  build_dataset:
-    build:
-      context: ../../..
-      dockerfile: docker/jobs/train/Dockerfile
-    container_name: build_dataset
-    env_file: .env.training
-    volumes:
-      - ${O_DRIVE_PATH}:/mnt/O:rw # dataset access
-      - ${TOOLS_LIB_PATH}:/workspace/tools:ro # access to tools library
-      - ../../../scripts:/workspace/scripts:ro # scripts directory
-      - ../../../configs:/workspace/configs:ro # config files
-      - ../../../src:/workspace/src:ro # source code
-      - ../../../utils:/workspace/utils:ro # utils directory
-      - ../../../data:/workspace/data:rw # data directory
     networks:
       - ml-platform
 

@@ -1,4 +1,4 @@
-name: Tests-Training
+name: Tests-Training-build-image
 
 on:
   push:
@@ -23,6 +23,10 @@ on:
           - training
           - integration
           - all
+      image_tag:
+        description: 'Tag for the training image if built (e.g. an experiment/config name)'
+        required: false
+        default: ''
 
 
 jobs:
@@ -63,3 +67,17 @@ jobs:
       - name: Run all tests (CPU only)
         if: inputs.run_tests == 'all'
         run: pytest tests/training/unit tests/training/integration -q
+  
+  training-build-push:
+    runs-on: ubuntu-latest
+    needs: test-dispatch
+    if: github.event_name == 'workflow_dispatch' && inputs.run_tests == 'all'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and push image
+        uses: ./.github/actions/build-push-image
+        with:
+          image_name: training
+          dockerfile: docker/jobs/train/Dockerfile
+          extra_tag: ${{ inputs.image_tag }}
+          token: ${{ secrets.GHCR_TOKEN }}

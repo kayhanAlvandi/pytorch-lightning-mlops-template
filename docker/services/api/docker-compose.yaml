@@ -1,9 +1,6 @@
 services:
   api:
-    build:
-      context: ../../..
-      dockerfile: docker/services/api/Dockerfile
-    image: image_classifier_api
+    image: ghcr.io/kayhanalvandi/pytorch-lightning-mlops-template/api:latest
     container_name: image_classifier_api
     env_file: .env.api
     ports:

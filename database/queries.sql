@@ -23,4 +23,4 @@ ORDER BY table_name;
 
 Select * FROM tile_channel_stats;
 
-Select * FROM reference_image_prediction;
+Select * FROM live_image_prediction;

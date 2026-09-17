@@ -1,4 +1,4 @@
-name: Tests-Monitoring
+name: Tests-Monitoring-build-image
 
 on:
   push:
@@ -103,3 +103,18 @@ jobs:
           requirements_file: requirements/api_req.txt
       - name: Run monitoring inference tests
         run: pytest tests/monitoring/inference -q
+
+
+  
+  monitoring-build-push:
+    runs-on: ubuntu-latest
+    needs: [monitoring-unit, monitoring-db, monitoring-inference]
+    if: github.event_name != 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and push image
+        uses: ./.github/actions/build-push-image
+        with:
+          image_name: monitoring
+          dockerfile: docker/jobs/monitoring/Dockerfile
+          token: ${{ secrets.GHCR_TOKEN }}

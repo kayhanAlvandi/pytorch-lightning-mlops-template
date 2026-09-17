@@ -1,4 +1,4 @@
-name: Tests-Serving
+name: Tests-Serving-build-image
 
 on:
   push:
@@ -31,3 +31,16 @@ jobs:
           requirements_file: requirements/api_req.txt
       - name: Run tests
         run: pytest tests/api -q
+  
+  serving-build-push:
+    runs-on: ubuntu-latest
+    needs: test-push-serving
+    if: github.event_name != 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and push image
+        uses: ./.github/actions/build-push-image
+        with:
+          image_name: api
+          dockerfile: docker/services/api/Dockerfile
+          token: ${{ secrets.GHCR_TOKEN }}

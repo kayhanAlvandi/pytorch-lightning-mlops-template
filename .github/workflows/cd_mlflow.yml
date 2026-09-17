@@ -1,0 +1,20 @@
+name: Build-Mlflow-Image
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'docker/services/mlflow/**'
+  workflow_dispatch:
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and push image
+        uses: ./.github/actions/build-push-image
+        with:
+          image_name: mlflow
+          dockerfile: docker/services/mlflow/Dockerfile
+          token: ${{ secrets.GHCR_TOKEN }}

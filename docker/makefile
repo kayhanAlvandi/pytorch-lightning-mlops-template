@@ -13,7 +13,7 @@ serve: network
 
 # Dev: bind-mounts api/utils/database/monitoring source + --reload, no rebuild on edit
 serve-dev: network
-	docker compose -f services/api/docker-compose.yaml -f services/api/docker-compose.dev.yaml up -d
+	docker compose -f services/api/docker-compose.yaml -f services/api/docker-compose.dev.yaml up -d --build
 
 # ── Jobs (ephemeral, run-and-exit) ───────────────────────────────────────
 # Usage: make train-run CMD="python train.py trainer=trainer_container model=vit_large"
@@ -48,23 +48,29 @@ label-backfill-run: network
 	docker compose -f jobs/monitoring/docker-compose.yaml run --rm label-backfill \
 		$(if $(CMD),$(CMD),python -m monitoring.backfill_labels)
 
+# Usage: make create-benchmark NAME=benchmark_v1
+#    (optional extra hydra overrides: ARGS="dataset_spec.max_samples_per_label=4")
 create-benchmark:
-	docker compose -f jobs/train/docker-compose.yaml run --rm build_dataset \
-		python scripts/build_dataset.py dataset_spec=benchmark name=benchmark_v1
+	$(if $(NAME),,$(error NAME is required, e.g. make create-benchmark NAME=benchmark_v1))
+	docker compose -f jobs/build_dataset/docker-compose.yaml run --rm build_dataset \
+		python scripts/build_dataset.py dataset_spec=benchmark name=$(NAME) $(ARGS)
 
+# Usage: make create-custom-dataset NAME=custom_v1
+#    (optional extra hydra overrides: ARGS="dataset_spec.max_samples_per_label=4")
 create-custom-dataset:
-	docker compose -f jobs/train/docker-compose.yaml run --rm build_dataset \
-		python scripts/build_dataset.py dataset_spec=custom-dataset name=custom_v1
+	$(if $(NAME),,$(error NAME is required, e.g. make create-custom-dataset NAME=custom_v1))
+	docker compose -f jobs/build_dataset/docker-compose.yaml run --rm build_dataset \
+		python scripts/build_dataset.py dataset_spec=custom-dataset name=$(NAME) $(ARGS)
 
-# Usage: make register-benchmark-run  (defaults to the manifest below)
-#    or: make register-benchmark-run CMD="python -m monitoring.register_benchmark --manifest data/<name>/dataset_manifest.json"
+# Usage: make register-benchmark-run MANIFEST=data/benchmark_v1/dataset_manifest.json
+#    advanced/glob mode: make register-benchmark-run CMD="python -m monitoring.register_benchmark '/mnt/O/benchmark/*.jxl'"
 # One-time/additive: registers curated benchmark samples (never in any
 # training set) into the database. Model-independent, no inference.
-# Build the manifest first: python scripts/build_dataset.py dataset_spec=benchmark name=<name>
-BENCHMARK_MANIFEST ?= data/benchmark_v1/dataset_manifest.json
+# Build the manifest first: make create-benchmark NAME=<name>
 register-benchmark-run: network
+	$(if $(or $(MANIFEST),$(CMD)),,$(error provide MANIFEST=<path> (manifest mode) or CMD=... (advanced/glob mode)))
 	docker compose -f jobs/monitoring/docker-compose.yaml run --rm register-benchmark \
-		$(if $(CMD),$(CMD),python -m monitoring.register_benchmark --manifest $(BENCHMARK_MANIFEST))
+		$(if $(CMD),$(CMD),python -m monitoring.register_benchmark --manifest $(MANIFEST) $(ARGS))
 
 # Usage: make mlflow-gc                      (permanently purges soft-deleted runs + their registry entries)
 #    or: make mlflow-gc ARGS="--dry-run"      (preview only, no changes)

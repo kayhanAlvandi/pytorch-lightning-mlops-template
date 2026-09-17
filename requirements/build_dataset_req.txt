@@ -1,0 +1,13 @@
+# scripts/build_dataset.py + src/sample_selection.py, src/dataset_versioning.py.
+# Deliberately torch-free (sample_selection.py's own docstring: "torch-free and
+# usable anywhere") -- no torch/timm/pytorch-lightning/opencv/mlflow needed,
+# unlike the full training image. Only hydra (CLI config), pandas/numpy (label
+# resolution + dummy labels), pillow/pillow-jxl (image shape reading) and
+# pymongo (tools.loading.getCategories runtime dep for MongoDB label lookup).
+hydra-core>=1.3.0
+omegaconf>=2.3.0
+pandas>=2.0.0
+numpy>=1.24.0
+pillow>=10.0.0
+pillow-jxl-plugin>=1.0.0
+pymongo>=4.0.0

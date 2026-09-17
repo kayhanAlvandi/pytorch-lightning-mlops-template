@@ -1,0 +1,21 @@
+services:
+  # Lightweight, torch-free image (see docker/jobs/build_dataset/Dockerfile) --
+  # build_dataset.py needs none of the heavy training image's ML stack.
+  # No network: it only reads local/mounted files and resolves labels via the
+  # external tools package (hardcoded MongoDB connection), never talks to
+  # postgres/mlflow/api.
+  build_dataset:
+    build:
+      context: ../../..
+      dockerfile: docker/jobs/build_dataset/Dockerfile
+    image: image_classifier_build_dataset
+    container_name: build_dataset
+    env_file: .env.training
+    volumes:
+      - ${O_DRIVE_PATH}:/mnt/O:ro # dataset access (read-only -- only reads image shapes)
+      - ${TOOLS_LIB_PATH}:/workspace/tools:ro # access to tools library
+      - ../../../scripts:/workspace/scripts:ro # scripts directory
+      - ../../../configs:/workspace/configs:ro # config files
+      - ../../../src:/workspace/src:ro # source code
+      - ../../../utils:/workspace/utils:ro # utils directory
+      - ../../../data:/workspace/data:rw # output: dataset_metadata.json/dataset_manifest.json

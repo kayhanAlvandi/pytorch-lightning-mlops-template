@@ -8,6 +8,12 @@
 # depends on what happens to be on a dev machine's disk.
 services:
   api:
+    # Dev builds locally (own tag, so it doesn't shadow the pulled GHCR
+    # :latest) instead of pulling from the registry -- iterate without pushing.
+    build:
+      context: ../../..
+      dockerfile: docker/services/api/Dockerfile
+    image: image_classifier_api:dev
     volumes:
       - ../../../api:/app/api:ro
       - ../../../utils:/app/utils:ro
