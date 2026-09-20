@@ -1,0 +1,8 @@
+# Job
+apiVersion: batch/v1
+kind: Job
+metadata:
+    name: register-benchmark
+    namespace: monitoring
+spec:
+    backofflimit
