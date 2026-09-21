@@ -12,6 +12,8 @@ RUN pip install --no-cache-dir --break-system-packages -r api_req.txt
 COPY api/ ./api/
 COPY utils/ ./utils/
 COPY database/ ./database/
+# needed api image for runing compute references
+COPY monitoring/compute_predictions_references.py ./monitoring/ 
 
 EXPOSE 8000
 
